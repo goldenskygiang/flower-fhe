@@ -1,6 +1,9 @@
-from model import get_model
+from collections import OrderedDict
+from model import get_model, test
 
-def get_evaluation_fn(dl_test):
+import torch
+
+def get_evaluation_fn(dl_test, device=None):
     '''
     Returns a function. The returned eval_fn() will be executed
     by the strategy at the end of each round to evaluate the
@@ -22,7 +25,7 @@ def get_evaluation_fn(dl_test):
         model.load_state_dict(state_dict, strict=True)
 
         # call test
-        loss, accuracy = test(model, dl_test)
+        loss, accuracy = test(model, dl_test, device)
         return loss, {'accuracy': accuracy}
 
     return evaluate_fn

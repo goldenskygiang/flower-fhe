@@ -3,6 +3,9 @@ from torch import Tensor
 import torch.nn as nn
 import torchvision
 
+import numpy as np
+import tqdm
+
 from abc import ABC, abstractmethod
 
 class Classifier(nn.Module, ABC):
@@ -73,3 +76,56 @@ def get_model(num_classes=20, threshold=0.5):
     mobilenet = MultiLabelClassifier(mobilenet, threshold=threshold)
 
     return mobilenet
+
+def train(model, dl_train, optimizer, epochs, device=None):
+    criterion = nn.BCEWithLogitsLoss(reduction='sum')
+
+    if device:
+        model.to(device)
+
+    model.train()
+
+    for epoch in range(epochs):
+        total_loss = 0.0
+
+        # Wrap your DataLoader with tqdm for a progress bar
+        for batch_idx, (X, y) in enumerate(tqdm(dl_train, desc=f'Epoch {epoch + 1}/{epochs}')):
+            if device:
+                X, y = X.to(device), y.to(device)
+            optimizer.zero_grad()
+            y_scores = model(X)
+            loss = criterion(y_scores, y)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+
+        # Calculate the average loss for the epoch
+        average_loss = total_loss / len(dl_train)
+
+        print(f"Epoch {epoch + 1}/{epochs}, Loss: {average_loss:.4f}")
+
+    return model
+
+def test(model, dl_test, device=None):
+    criterion = nn.BCEWithLogitsLoss(reduction='sum')
+    num_correct, loss = 0, 0.0
+    if device:
+        model.to(device)
+    model.eval()
+
+    with torch.no_grad():
+        for (x, y) in dl_test:
+            if device:
+                x, y = x.to(device), y.to(device)
+            y_scores = model(x)
+            loss += criterion(y_scores, y).item()
+
+            y_pred = model.classify_scores(y_scores)
+            y_pred = y_pred.cpu().numpy()
+            y = y.cpu().numpy()
+            num_correct += np.sum(y_pred == y)
+
+    # avg_loss = sum(losses) / num_batches
+    accuracy = 100.0 * np.sum(num_correct) / (len(dl_test.dataset) * 20) # 20: n_classes
+    #accuracy = correct / len(dl_test.dataset)
+    return loss, accuracy
