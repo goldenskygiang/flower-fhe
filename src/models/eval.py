@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from model import get_model, test
+from models import get_model, test
 
 import torch
 

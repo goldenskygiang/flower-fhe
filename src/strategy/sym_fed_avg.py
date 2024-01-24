@@ -1,5 +1,5 @@
 from crypto.rsa_crypto import RsaCryptoAPI
-from model import get_model
+from models import get_model
 
 from typing import Callable, Dict, List, Optional, Tuple, Union
 import torch

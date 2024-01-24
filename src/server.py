@@ -1,5 +1,5 @@
 import argparse
-from args_validator import fraction_validator, port_number_validator
+from utils.args_validator import fraction_validator, port_number_validator
 
 def init_arguments():
     parser = argparse.ArgumentParser(
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     from flwr.common.logger import log
     from logging import INFO, WARNING
 
-    from model.eval import get_evaluation_fn
+    from models.eval import get_evaluation_fn
     from dataset import prep_data_decentralized
     from strategy.fhe_fed_avg import FheFedAvg
     from strategy.sym_fed_avg import SymFedAvg

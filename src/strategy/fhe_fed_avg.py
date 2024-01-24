@@ -1,5 +1,5 @@
 from crypto.fhe_crypto import FheCryptoAPI
-from model import get_model
+from models import get_model
 
 from typing import Callable, Dict, List, Optional, Tuple, Union
 from logging import WARNING

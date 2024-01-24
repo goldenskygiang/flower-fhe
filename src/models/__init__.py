@@ -4,7 +4,7 @@ import torch.nn as nn
 import torchvision
 
 import numpy as np
-import tqdm
+from tqdm import tqdm
 
 from abc import ABC, abstractmethod
 
