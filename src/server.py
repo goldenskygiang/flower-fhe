@@ -7,8 +7,8 @@ def init_arguments():
 
     parser.add_argument('--mode', choices=['fhe', 'sym'], required=True,
                         help='Choose either Fully Homomorphic Encryption (fhe) or Symmetric Encryption (sym) mode')
-    parser.add_argument('--https', action='store_true',
-                        help='Enable HTTPS (optional)')
+    # parser.add_argument('--https', action='store_true',
+    #                     help='Enable HTTPS (optional)')
     parser.add_argument('--gpu', action='store_true',
                         help='Enable GPU for global evaluation (optional)')
     parser.add_argument('--localhost', action='store_true',

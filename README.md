@@ -53,7 +53,6 @@ Run Federated Learning server with model encryption mechanisms
 options:
   -h, --help            show this help message and exit
   --mode {fhe,sym}      Choose either Fully Homomorphic Encryption (fhe) or Symmetric Encryption (sym) mode
-  --https               Enable HTTPS (optional)
   --gpu                 Enable GPU for global evaluation (optional)
   --localhost           Run localhost only (optional)
   --port PORT           Port number (default is 8080)
@@ -98,7 +97,6 @@ Run Federated Learning client with model encryption mechanisms
 options:
   -h, --help            show this help message and exit
   --mode {fhe,sym}      Choose either Fully Homomorphic Encryption (fhe) or Symmetric Encryption (sym) mode
-  --https               Enable HTTPS (optional)
   --gpu                 Enable GPU training & inference (optional)
   --localhost           Run localhost only (optional)
   --host HOST           IP address or hostname of the server; cannot be used together with localhost
