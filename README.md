@@ -2,13 +2,15 @@
 
 ## Getting started
 
+### Linux
+
 ```sh
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Install OpenFHE dependencies
+#### Install OpenFHE
 
 ```sh
 sudo apt-get install -y clang libomp5 libomp-dev cmake libgmp3-dev libntl-dev libomp-dev autoconf
@@ -24,7 +26,7 @@ make -j 8
 sudo make install
 ```
 
-### Install OpenFHE-python binding
+#### Install OpenFHE-python binding
 
 ```sh
 cd ./openfhe-python
@@ -33,6 +35,88 @@ cd build
 cmake ..
 make -j 8
 make install
+```
+
+### Windows
+
+TOTALLY INCOMPLETE GUIDE, WOULD NOT WORK RIGHT NOW.
+
+#### Install OpenFHE
+
+- Download and install [MSYS2](https://www.msys2.org/).
+
+- Open **MSYS2 MinGW64** and run the following:
+
+```sh
+pacman -Syu
+pacman -S mingw-w64-x86_64-gcc
+pacman -S mingw-w64-x86_64-cmake
+pacman -S make
+pacman -S git
+pacman -S autoconf
+```
+
+- Download [NTL Unix](https://libntl.org/doc/tour-unix.html) and unzip.
+
+- Build NTL Unix in MSYS2 terminal.
+
+```sh
+cd src
+./configure
+make
+make install
+```
+
+- Clone this repo (including submodules with `--recurse-submodules`).
+
+- `cd openfhe-development` and run the following, also in MSYS2 shell **as administrator**:
+
+```sh
+mkdir build
+cd build
+cmake .. -DMATHBACKEND=6 -DWITH_OPENMP=ON -DWITH_NATIVEOPT=ON -DBUILD_SHARE=ON -DNTL_INCLUDE_DIR=/usr/local/include -DNTL_LIBRARIES=/usr/local/lib
+make -j 8
+make install
+```
+
+Usually OpenFHE will be installed at ` C:/Program Files (x86)/OpenFHE`.
+
+#### Install OpenFHE-python binding
+
+- Add these lines in `openfhe-python/CMakeLists.txt`.
+
+```
+include_directories( ${NTL_INCLUDE_DIR} )
+link_libraries( ${NTL_LIBDIR} )
+```
+
+- Run the following in MSYS2 MinGW shell.
+
+  - If the `cmake` throws error about missing `pybind11`, find `pybind11` CMake files and add option `-Dpybind11_DIR` (usually at `venv/Lib/site-packages/pybind11/share/cmake/pybind11`)
+
+```sh
+export PATH=$PATH:'/c/Program Files (x86)/OpenFHE/lib:/usr/local/lib'
+
+python -m venv venv
+source venv/Scripts/activate
+pip install -r requirements-win.txt
+
+python -m pip install ninja
+
+cd openfhe-python
+mkdir build
+cd build
+cmake .. -DOpenFHE_DIR='/c/Program Files (x86)/OpenFHE' -DNTL_INCLUDE_DIR=/usr/local/include -DNTL_LIBDIR=/usr/local/lib/libntl.a
+ninja
+ninja install
+```
+
+### How to know if you setup correctly?
+
+```sh
+$ source venv/bin/activate
+$ python
+>>> from openfhe import *
 ```
 
 ## Server

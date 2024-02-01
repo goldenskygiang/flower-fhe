@@ -1,0 +1,9 @@
+torch
+torchvision
+tqdm
+pandas
+matplotlib
+py-markdown-table
+pybind11
+pillow
+cryptography
