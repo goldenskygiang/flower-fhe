@@ -7,6 +7,7 @@ import numpy as np
 from tqdm import tqdm
 
 from abc import ABC, abstractmethod
+from utils.metrics import Metrics
 
 class Classifier(nn.Module, ABC):
     '''
@@ -45,13 +46,18 @@ class Classifier(nn.Module, ABC):
     def _classify(self, y_proba: Tensor) -> Tensor:
         pass
 
+
 class MultiLabelClassifier(Classifier):
+    '''
+    Wraps a Classifier type and implements classify() method
+    '''
     def __init__(self, model, threshold: float = 0.5):
         super().__init__(model)
         self.threshold = threshold
 
     def _classify(self, y_proba: Tensor):
         return (y_proba > self.threshold).type(torch.float32)
+
 
 def get_model(num_classes=20, threshold=0.5):
     mobilenet = torchvision.models.mobilenet_v2(weights='IMAGENET1K_V1')
@@ -72,10 +78,36 @@ def get_model(num_classes=20, threshold=0.5):
     )
 
     mobilenet.classifier = classifier
-
     mobilenet = MultiLabelClassifier(mobilenet, threshold=threshold)
 
     return mobilenet
+
+
+def get_additional_metrics(y_pred, y_target, custom_dict):
+    #add_metrics = {
+    #         'precision': [],
+    #         'recall': [],
+    #         'accuracy': [],
+    #         'hamming_loss': [],
+    #         'jaccard': []
+    # }
+    metrics = Metrics(y_pred, y_target)
+
+    custom_dict['precision'].append(metrics.precision().cpu())
+    custom_dict['recall'].append(metrics.recall().cpu())
+    custom_dict['accuracy'].append(metrics.accuracy().cpu())
+    custom_dict['hamming_loss'].append(metrics.hamming_loss().cpu())
+    custom_dict['jaccard'].append(metrics.jaccard_index().cpu())
+
+    return custom_dict
+
+def get_avg_metrics(custom_dict):
+    p = np.mean(custom_dict['precision'])
+    r = np.mean(custom_dict['recall'])
+    a = np.mean(custom_dict['accuracy'])
+    h = np.mean(custom_dict['hamming_loss'])
+    j = np.mean(custom_dict['jaccard'])
+    return p, r, a, h, j
 
 def train(model, dl_train, optimizer, epochs, device=None):
     criterion = nn.BCEWithLogitsLoss(reduction='sum')
@@ -85,8 +117,23 @@ def train(model, dl_train, optimizer, epochs, device=None):
 
     model.train()
 
+    hist = {
+        'precision': [],
+        'recall': [],
+        'accuracy': [],
+        'hamming_loss': [],
+        'jaccard': []
+    } # storing epoch-wise metrics
+
     for epoch in range(epochs):
         total_loss = 0.0
+        add_metrics_dict = {
+            'precision': [],
+            'recall': [],
+            'accuracy': [],
+            'hamming_loss': [],
+            'jaccard': []
+        } # initializes a new metrics dictionary for each epoch
 
         # Wrap your DataLoader with tqdm for a progress bar
         for batch_idx, (X, y) in enumerate(tqdm(dl_train, desc=f'Epoch {epoch + 1}/{epochs}')):
@@ -99,12 +146,21 @@ def train(model, dl_train, optimizer, epochs, device=None):
             optimizer.step()
             total_loss += loss.item()
 
+            # accumulate metrics across each batch
+            add_metrics_dict = get_additional_metrics(model.classify_scores(y_scores), y, add_metrics_dict)
+
         # Calculate the average loss for the epoch
         average_loss = total_loss / len(dl_train)
+        p, r, a, h, j = get_avg_metrics(add_metrics_dict)
+        hist['precision'].append(p)
+        hist['recall'].append(r)
+        hist['accuracy'].append(a)
+        hist['hamming'].append(h)
+        hist['jaccard'].append(j)
 
-        print(f"Epoch {epoch + 1}/{epochs}, Loss: {average_loss:.4f}")
+        print(f"\n Epoch {epoch + 1}/{epochs}, Loss: {average_loss:.4f}  -- Precision: {p:.2f} -- Recall: {r:.2f} -- Acc: {a:.2f} -- Hamming: {h:.2f} -- Jaccard: {j:.2f}")
 
-    return model
+    return model, hist
 
 def test(model, dl_test, device=None):
     criterion = nn.BCEWithLogitsLoss(reduction='sum')
@@ -113,6 +169,14 @@ def test(model, dl_test, device=None):
         model.to(device)
     model.eval()
 
+    add_metrics_dict = {
+            'precision': [],
+            'recall': [],
+            'accuracy': [],
+            'hamming_loss': [],
+            'jaccard': []
+        } # initializes a new metrics dictionary
+
     with torch.no_grad():
         for (x, y) in dl_test:
             if device:
@@ -120,12 +184,22 @@ def test(model, dl_test, device=None):
             y_scores = model(x)
             loss += criterion(y_scores, y).item()
 
-            y_pred = model.classify_scores(y_scores)
-            y_pred = y_pred.cpu().numpy()
-            y = y.cpu().numpy()
-            num_correct += np.sum(y_pred == y)
+            # y_pred = model.classify_scores(y_scores)
+            # y_pred = y_pred.cpu().numpy()
+            # y = y.cpu().numpy()
+            # num_correct += np.sum(y_pred == y)
+
+            add_metrics_dict = get_additional_metrics(model.classify_scores(y_scores), y, add_metrics_dict) # accumulate
 
     # avg_loss = sum(losses) / num_batches
-    accuracy = 100.0 * np.sum(num_correct) / (len(dl_test.dataset) * 20) # 20: n_classes
+    #accuracy = 100.0 * np.sum(num_correct) / (len(dl_test.dataset) * 20) # 20: n_classes
     #accuracy = correct / len(dl_test.dataset)
-    return loss, accuracy
+    p, r, a, h, j = get_avg_metrics(add_metrics_dict)
+    m = {
+        'precision': p,
+        'recall': r,
+        'accuracy': a,
+        'hamming': h,
+        'jaccard': j
+    }
+    return loss, m

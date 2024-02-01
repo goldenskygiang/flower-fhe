@@ -37,7 +37,7 @@ class FheClient(fl.client.Client):
         '''
         cc = ins.config['crypto_context']
         pubkey = ins.config['public_key']
-        
+
         enc_params = [FheCryptoAPI.encrypt_numpy_array(
             cc, pubkey, val.cpu().numpy()) \
                       for _, val in self.model.state_dict().items()]
@@ -86,7 +86,7 @@ class FheClient(fl.client.Client):
         ])
 
         # local training
-        train(self.model, self.dl_train, optim, epochs=1, device=self.device)
+        trained_model, metrics_history = train(self.model, self.dl_train, optim, epochs=1, device=self.device)
 
         # return model's params to the server, as well as extra info (number of training samples)
         get_param_ins = GetParametersIns(config={
@@ -98,7 +98,7 @@ class FheClient(fl.client.Client):
             status=Status(code=Code.OK, message="Success"),
             parameters=self.get_parameters(get_param_ins).parameters,
             num_examples=len(self.dl_train),
-            metrics={}
+            metrics=metrics_history
         )
 
     def evaluate(self, ins: EvaluateIns) -> EvaluateRes:
@@ -110,12 +110,12 @@ class FheClient(fl.client.Client):
 
         self.set_parameters(ins.parameters, ins.config)
 
-        loss, accuracy = test(self.model, self.dl_val, device=self.device)
+        loss, metrics_dict = test(self.model, self.dl_val, device=self.device)
 
         # send back to server
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
             loss=float(loss),
             num_examples=len(self.dl_val),
-            metrics={'accuracy': accuracy}
+            metrics=metrics_dict
         )

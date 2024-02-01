@@ -25,7 +25,7 @@ def get_evaluation_fn(dl_test, device=None):
         model.load_state_dict(state_dict, strict=True)
 
         # call test
-        loss, accuracy = test(model, dl_test, device)
-        return loss, {'accuracy': accuracy}
+        loss, metrics_dict = test(model, dl_test, device)
+        return loss, metrics_dict
 
     return evaluate_fn
