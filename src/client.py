@@ -22,8 +22,6 @@ def init_arguments():
     data_group = parser.add_argument_group('Data Configuration')
     data_group.add_argument('--data_path', type=str, required=True,
                         help='Path to data folder')
-    data_group.add_argument('--num_partitions', type=int, default=100, 
-                            help='Number of data partitions (default is 100)')
     data_group.add_argument('--batch_size', type=int, default=32, 
                             help='Data batch size (default is 32)')
     
@@ -47,14 +45,14 @@ def generate_client_fn(dl_trains, dl_vals, fhe: bool, device=None):
         if fhe:
             return FheClient(
                 cid=cid,
-                dl_train=dl_trains[int(cid)],
-                dl_val=dl_vals[int(cid)],
+                dl_train=dl_trains,
+                dl_val=dl_vals,
                 device=device)
         else:
             return SymClient(
                 cid=cid,
-                dl_train=dl_train[int(cid)],
-                dl_val=dl_vals[int(cid)],
+                dl_train=dl_train,
+                dl_val=dl_vals,
                 device=device
             )
 
@@ -67,10 +65,13 @@ if __name__ == '__main__':
     import flwr as fl
     from flwr.common.logger import log
     from logging import INFO, WARNING
-    from dataset import prep_data_decentralized
+    from dataset import prep_data
+    from torch.utils.data import DataLoader
 
-    dl_train, dl_val, dl_test = prep_data_decentralized(
-        data_path=args.data_path, num_partitions=args.num_partitions, batch_size=args.batch_size)
+    dl_train, dl_val, dl_test = prep_data(data_path=args.data_path)
+
+    dl_train = DataLoader(dl_train, batch_size=args.batch_size)
+    dl_val = DataLoader(dl_val, batch_size=args.batch_size)
     
     if args.gpu:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
