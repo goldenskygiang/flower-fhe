@@ -89,8 +89,10 @@ if __name__ == '__main__':
 
     log(INFO, f"Server listening on {server_addr}")
 
-    fl.server.start_server(
+    hist = fl.server.start_server(
         server_address=server_addr,
         config=fl.server.ServerConfig(num_rounds=args.server_rounds),
         strategy=strategy
     )
+
+    print(f"{hist}")

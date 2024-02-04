@@ -88,7 +88,9 @@ if __name__ == '__main__':
 
     log(INFO, f"Client connecting to server at {server_addr}")
 
-    fl.client.app.start_client(
+    hist = fl.client.app.start_client(
         server_address=server_addr,
         client_fn=client_fn
     )
+
+    print(f"{hist}")
