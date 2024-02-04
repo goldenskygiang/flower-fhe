@@ -28,7 +28,7 @@ def init_arguments():
     args = parser.parse_args()
 
     # Check for either host or localhost option
-    if not any([arg for arg in ['--host', '--localhost'] if arg in sys.argv]):
+    if not args.localhost and (args.host is None):
         parser.error("Either --host or --localhost must be specified.")
     
     # Check for conflicting host options

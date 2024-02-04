@@ -117,8 +117,6 @@ options:
 Data Configuration:
   --data_path DATA_PATH
                         Path to data folder
-  --num_partitions NUM_PARTITIONS
-                        Number of data partitions (default is 100)
   --batch_size BATCH_SIZE
                         Data batch size (default is 32)
 ```
