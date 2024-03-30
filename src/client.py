@@ -1,5 +1,7 @@
 import argparse
+import os
 import sys
+from typing import List, Optional
 from utils.args_validator import port_number_validator, host_validator, fraction_validator
 
 def init_arguments():
@@ -43,28 +45,36 @@ def init_arguments():
 
     return args
 
-def generate_client_fn(dl_trains, dl_vals, fhe: bool, device=None, straggler_prob: float = 0, proximal_mu: float = 0):    
+def generate_client_fn(dl_trains, dl_vals, fhe: bool, device=None,
+                       straggler_prob: Optional[float | List[float]] = 0,
+                       proximal_mu: Optional[float | List[float]] = 0):
     from fl_clients.fhe_client import FheClient
     from fl_clients.sym_client import SymClient
     
     def client_fn(cid: str):
+        cid = int(cid)
+        strag_prob = straggler_prob[cid] if isinstance(straggler_prob, list) else straggler_prob
+        mu = proximal_mu[cid] if isinstance(proximal_mu, list) else proximal_mu
+        train_dl = dl_trains[cid] if isinstance(dl_trains, list) else dl_trains
+        eval_dl = dl_vals[cid] if isinstance(dl_vals, list) else dl_vals
+
         if fhe:
             return FheClient(
                 cid=cid,
-                dl_train=dl_trains,
-                dl_val=dl_vals,
+                dl_train=train_dl,
+                dl_val=eval_dl,
                 device=device,
-                straggler_prob=straggler_prob,
-                proximal_mu=proximal_mu
+                straggler_prob=strag_prob,
+                proximal_mu=mu
             )
         else:
             return SymClient(
                 cid=cid,
-                dl_train=dl_train,
-                dl_val=dl_vals,
+                dl_train=train_dl,
+                dl_val=eval_dl,
                 device=device,
-                straggler_prob=straggler_prob,
-                proximal_mu=proximal_mu
+                straggler_prob=strag_prob,
+                proximal_mu=mu
             )
 
     return client_fn
