@@ -1,6 +1,7 @@
 from collections import OrderedDict
-from logging import INFO
+from logging import INFO, WARNING
 
+import random as rd
 import torch
 import flwr as fl
 from flwr.common.logger import log
@@ -19,13 +20,15 @@ from crypto.fhe_crypto import FheCryptoAPI
 from models import get_model, train, test
 
 class FheClient(fl.client.Client):
-    def __init__(self, cid, dl_train, dl_val, device=None) -> None:
+    def __init__(self, cid, dl_train, dl_val, device=None, straggler_prob: float=0, proximal_mu: float=0) -> None:
         super().__init__()
         self.cid = cid
         self.dl_train = dl_train
         self.dl_val = dl_val
         self.device = device
         self.model = get_model()
+        self.straggler_prob = straggler_prob
+        self.proximal_mu = proximal_mu
 
         if device:
             self.model = self.model.to(device)
@@ -73,20 +76,25 @@ class FheClient(fl.client.Client):
         this client's dataset. At the end, the params (locally
         trained) are comminucated back to the server)
         '''
-        log(INFO, f'Client {self.cid} training')
 
         # copy params from server
         self.set_parameters(ins.parameters, ins.config)
 
-        # define optimizer
-        #optim = torch.optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9)
-        optim = torch.optim.SGD([
-            {'params': list(self.model.parameters())[:-1], 'lr': 1e-4, 'momentum':0.9},
-            {'params': list(self.model.parameters())[-1], 'lr': 5e-2, 'momentum': 0.9}
-        ])
+        is_straggler = rd.choices([True, False], weights=[self.straggler_prob, 1 - self.straggler_prob], k=1)[0]
 
-        # local training
-        train(self.model, self.dl_train, optim, epochs=1, device=self.device)
+        if not is_straggler:
+            log(INFO, f'Client {self.cid} training')
+            # define optimizer
+            #optim = torch.optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9)
+            optim = torch.optim.SGD([
+                {'params': list(self.model.parameters())[:-1], 'lr': 1e-4, 'momentum':0.9},
+                {'params': list(self.model.parameters())[-1], 'lr': 5e-2, 'momentum': 0.9}
+            ])
+
+            # local training
+            train(self.model, self.dl_train, optim, epochs=1, device=self.device, proximal_mu=self.proximal_mu)
+        else:
+            log(WARNING, f'Client {self.cid} is a straggler in this round')
 
         # return model's params to the server, as well as extra info (number of training samples)
         get_param_ins = GetParametersIns(config={
@@ -98,7 +106,7 @@ class FheClient(fl.client.Client):
             status=Status(code=Code.OK, message="Success"),
             parameters=self.get_parameters(get_param_ins).parameters,
             num_examples=len(self.dl_train),
-            metrics={}
+            metrics={ "is_straggler": is_straggler }
         )
 
     def evaluate(self, ins: EvaluateIns) -> EvaluateRes:

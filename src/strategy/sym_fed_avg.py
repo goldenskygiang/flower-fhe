@@ -102,9 +102,15 @@ class SymFedAvg(fl.server.strategy.FedAvg):
 
     def initialize_parameters(self, client_manager: ClientManager):
         #log(INFO, f'Server AES key: {self.__aes_key}')
+        # TODO: Save initial checkpoint
         return Parameters(
             tensors=[v.cpu().numpy() for _, v in self.model.state_dict().items()],
             tensor_type="numpy.ndarrays")
+    
+    def _get_param_info(self):
+        return zip([],
+                    [v.shape for k, v in self.model.state_dict().items()],
+                    [v.dtype for k, v in self.model.state_dict().items()])
 
     def _decrypt_params(self, parameters: Parameters) -> NDArrays:
         params = zip(parameters.tensors,
@@ -117,6 +123,12 @@ class SymFedAvg(fl.server.strategy.FedAvg):
     def _encrypt_params(self, ndarrays: NDArrays) -> Parameters:
         enc_tensors = [RsaCryptoAPI.encrypt_numpy_array(self.__aes_key, arr) for arr in ndarrays]
         return Parameters(tensors=enc_tensors, tensor_type="")
+    
+    def _save_checkpoint(self):
+        pass
+
+    def _load_previous_checkpoint(self) -> NDArrays:
+        pass
 
     def configure_fit(
             self, server_round: int, parameters: Parameters, client_manager: ClientManager
@@ -186,24 +198,32 @@ class SymFedAvg(fl.server.strategy.FedAvg):
         # Do not aggregate if there are failures and failures are not accepted
         if not self.accept_failures and failures:
             return None, {}
+        
+        stragglers_mask = [res.metrics["is_straggler"] for _, res in results]
+        stragglers_cnt = sum(stragglers_mask)
+        if stragglers_cnt > 0:
+            log(WARNING, f'Found {sum(stragglers_mask)} stragglers in this round; their weights will be discarded')
 
         # We deserialize each of the results with our custom method
         weights_results = [
             (self._decrypt_params(fit_res.parameters), fit_res.num_examples)
-            for _, fit_res in results
+            for i, (_, fit_res) in enumerate(results) if not stragglers_mask[i]
         ]
 
-        # We serialize the aggregated result using our cutom method
+        # We serialize the aggregated result using our custom method
+        # TODO: Load encrypted model of previous checkpoint if all clients are stragglers
         parameters_aggregated = self._encrypt_params(
-            aggregate(weights_results)
+            aggregate(weights_results) #if stragglers_cnt < len(results) else self._load_previous_checkpoint()
         )
 
         # Aggregate custom metrics if aggregation fn was provided
         metrics_aggregated = {}
-        if self.fit_metrics_aggregation_fn:
+        if self.fit_metrics_aggregation_fn and len(parameters_aggregated.tensors) > 0:
             fit_metrics = [(res.num_examples, res.metrics) for _, res in results]
             metrics_aggregated = self.fit_metrics_aggregation_fn(fit_metrics)
         elif server_round == 1:  # Only log this warning once
             log(WARNING, "No fit_metrics_aggregation_fn provided")
+
+        # TODO: Save new checkpoint here
 
         return parameters_aggregated, metrics_aggregated

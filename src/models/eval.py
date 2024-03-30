@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from logging import WARNING, log
 from models import get_model, test
 
 import torch
@@ -15,6 +16,11 @@ def get_evaluation_fn(dl_test, device=None):
         params with the global's. Then this model is evaluated on
         the test set (the whole central test set)
         '''
+        if len(parameters) == 0:
+            # skip evaluation since all clients were stragglers probably
+            log(WARNING, "All clients are possibly stragglers in this round. Skip evaluation")
+            return None, {'accuracy': None}
+
         model = get_model()
         # set params
         params_dict = zip(model.state_dict().keys(), parameters)

@@ -99,6 +99,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
         )
 
     def initialize_parameters(self, client_manager: ClientManager):
+        # TODO: Save initial checkpoint
         return Parameters(
             tensors=[v.cpu().numpy() for _, v in self.model.state_dict().items()],
             tensor_type="numpy.ndarrays")
@@ -190,22 +191,30 @@ class FheFedAvg(fl.server.strategy.FedAvg):
         # Do not aggregate if there are failures and failures are not accepted
         if not self.accept_failures and failures:
             return None, {}
+        
+        stragglers_mask = [res.metrics["is_straggler"] for _, res in results]
+
+        if sum(stragglers_mask) > 0:
+            log(WARNING, f'Found {sum(stragglers_mask)} stragglers in this round; their weights will be discarded')
 
         # We deserialize each of the results with our custom method
+        # TODO: Load encrypted model of previous checkpoint if all clients are stragglers
         weights_results = [
             (fit_res.parameters, fit_res.num_examples)
-            for _, fit_res in results
+            for i, (_, fit_res) in enumerate(results) if not stragglers_mask[i]
         ]
 
-        # We serialize the aggregated result using our cutom method
+        # We serialize the aggregated result using our custom method
         parameters_aggregated = self.__secure_aggregate(weights_results)
 
         # Aggregate custom metrics if aggregation fn was provided
         metrics_aggregated = {}
-        if self.fit_metrics_aggregation_fn:
+        if self.fit_metrics_aggregation_fn and len(parameters_aggregated.tensors) > 0:
             fit_metrics = [(res.num_examples, res.metrics) for _, res in results]
             metrics_aggregated = self.fit_metrics_aggregation_fn(fit_metrics)
         elif server_round == 1:  # Only log this warning once
             log(WARNING, "No fit_metrics_aggregation_fn provided")
+
+        # TODO: Save new checkpoint here
 
         return parameters_aggregated, metrics_aggregated

@@ -77,11 +77,13 @@ def get_model(num_classes=20, threshold=0.5):
 
     return mobilenet
 
-def train(model, dl_train, optimizer, epochs, device=None):
+def train(model, dl_train, optimizer, epochs, device=None, proximal_mu: float=0):
     criterion = nn.BCEWithLogitsLoss(reduction='sum')
 
     if device:
         model.to(device)
+
+    global_params = [val.clone() for val in model.parameters()]
 
     model.train()
 
@@ -93,8 +95,13 @@ def train(model, dl_train, optimizer, epochs, device=None):
             if device:
                 X, y = X.to(device), y.to(device)
             optimizer.zero_grad()
+
+            proximal_term = 0.0
+            for local_w, global_w in zip(model.parameters(), global_params):
+                proximal_term += torch.square((local_w - global_w).norm(2))
+
             y_scores = model(X)
-            loss = criterion(y_scores, y)
+            loss = criterion(y_scores, y) + (proximal_mu / 2) * proximal_term
             loss.backward()
             optimizer.step()
             total_loss += loss.item()

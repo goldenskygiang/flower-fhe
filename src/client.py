@@ -1,6 +1,6 @@
 import argparse
 import sys
-from utils.args_validator import port_number_validator, host_validator
+from utils.args_validator import port_number_validator, host_validator, fraction_validator
 
 def init_arguments():
     parser = argparse.ArgumentParser(
@@ -25,6 +25,12 @@ def init_arguments():
     data_group.add_argument('--batch_size', type=int, default=32, 
                             help='Data batch size (default is 32)')
     
+    fedprox_group = parser.add_argument_group('FedProx Configuration')
+    fedprox_group.add_argument('--straggler_prob', type=fraction_validator, default=0,
+                               help='Probability of being a Straggler node (default is 0, limit double value from 0 to 1)')
+    fedprox_group.add_argument('--proximal_mu', type=float, default=0,
+                               help='Proximal mu value (default is 0)')
+
     args = parser.parse_args()
 
     # Check for either host or localhost option
@@ -37,7 +43,7 @@ def init_arguments():
 
     return args
 
-def generate_client_fn(dl_trains, dl_vals, fhe: bool, device=None):    
+def generate_client_fn(dl_trains, dl_vals, fhe: bool, device=None, straggler_prob: float = 0, proximal_mu: float = 0):    
     from fl_clients.fhe_client import FheClient
     from fl_clients.sym_client import SymClient
     
@@ -47,13 +53,18 @@ def generate_client_fn(dl_trains, dl_vals, fhe: bool, device=None):
                 cid=cid,
                 dl_train=dl_trains,
                 dl_val=dl_vals,
-                device=device)
+                device=device,
+                straggler_prob=straggler_prob,
+                proximal_mu=proximal_mu
+            )
         else:
             return SymClient(
                 cid=cid,
                 dl_train=dl_train,
                 dl_val=dl_vals,
-                device=device
+                device=device,
+                straggler_prob=straggler_prob,
+                proximal_mu=proximal_mu
             )
 
     return client_fn
@@ -83,11 +94,14 @@ if __name__ == '__main__':
 
     log(INFO, f'Using device: {device}')
     
-    client_fn = generate_client_fn(dl_train, dl_val, args.mode == 'fhe', device)
+    client_fn = generate_client_fn(dl_train, dl_val, args.mode == 'fhe', device, args.straggler_prob, args.proximal_mu)
 
     server_addr = f"127.0.0.1:{args.port}" if args.localhost else f"{args.host}:{args.port}"
 
     log(INFO, f"Client connecting to server at {server_addr}")
+
+    if max(args.straggler_prob, args.proximal_mu) > 0:
+        log(INFO, f"Client using FedProx with straggler_prob={args.straggler_prob}, mu={args.proximal_mu}")
 
     hist = fl.client.app.start_client(
         server_address=server_addr,
