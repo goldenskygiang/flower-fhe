@@ -78,7 +78,8 @@ def run_simulation(
         config=fl.server.ServerConfig(num_rounds=serv_rounds),
         strategy=strategy,
         ray_init_args={
-            "include_dashboard": dashboard
+            "include_dashboard": dashboard,
+            "dashboard_host": "0.0.0.0"
         }
     )
 
