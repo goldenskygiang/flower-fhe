@@ -7,6 +7,7 @@ import torchvision.transforms.functional as F
 from torch.utils.data import Dataset
 from torch.utils.data import random_split
 from torch.utils.data import DataLoader
+from torchvision.datasets import CIFAR100, CIFAR10
 
 from PIL import Image
 from typing import Tuple
@@ -78,6 +79,49 @@ class PascalVOCDataset(Dataset):
 
         return img, encode_label(label)
 
+
+class CifarDataset(Dataset):
+    def __init__(self, data_path, ver: str='10', train=True, transform=None):
+        self.cifar = None
+        if ver == '10':
+            self.cifar = CIFAR10(root=data_path, train=train, download=True, transform=transform)
+        else:
+            self.cifar = CIFAR100(root=data_path, train=train, download=True, transform=transform)
+
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.cifar)
+
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, int] :
+        img = self.cifar.data[index]
+        label = self.cifar.targets[index]
+
+        if self.transform:
+            img = self.transform(img)
+
+        return img, label
+
+
+def prep_data_cifar(data_path, ver: str='10', val_split=0.15):
+    tf = tvtf.Compose([
+        tvtf.ToTensor(),
+        tvtf.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    ])
+
+    full_train = CifarDataset(data_path, ver, train=True, transform=tf)
+
+    # Split the dataset into train, val
+    total_size = len(full_train)
+    val_size = int(total_size * val_split)
+    train_size = total_size - val_size
+    ds_train, ds_val = torch.utils.data.random_split(full_train, [train_size, val_size])
+
+    ds_test = CIFAR10(data_path, ver, train=False, transform=tf)
+
+    return ds_train, ds_val, ds_test
+
+
 def prep_data(data_path):
     # Transform
     mean = [.485, 0.456, 0.406]
@@ -93,13 +137,14 @@ def prep_data(data_path):
         tvtf.Resize((300, 300)), tvtf.CenterCrop((256, 256)),
         tvtf.RandomHorizontalFlip(p=0.25),
         tvtf.ToTensor(), tvtf.Normalize(mean=mean, std=std)
-    ])  
+    ])
 
     ds_train = PascalVOCDataset(data_path, 'train.csv', transform=train_transform)
     ds_valid = PascalVOCDataset(data_path, 'valid.csv', transform=train_transform)
     ds_test = PascalVOCDataset(data_path, 'test.csv', transform=eval_test_transform)
 
     return ds_train, ds_valid, ds_test
+
 
 def prep_data_decentralized(data_path, num_partitions: int,
                  batch_size: int=128, num_workers: int=2):
