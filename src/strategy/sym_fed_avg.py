@@ -146,6 +146,7 @@ class SymFedAvg(fl.server.strategy.FedAvg):
             fit_ins.config['enc_key'] = RsaCryptoAPI.encrypt_aes_key(
                 self.__aes_key, public_key_pem)
             fit_ins.config['private_key_pem'] = private_key_pem
+            fit_ins.config['curr_round'] = server_round
 
         return fit_config
 

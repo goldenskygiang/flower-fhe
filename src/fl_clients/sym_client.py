@@ -2,6 +2,8 @@ from collections import OrderedDict
 from logging import INFO, WARNING
 
 import random as rd
+from typing import List
+from numpy import ndarray
 import torch
 import flwr as fl
 from flwr.common.logger import log
@@ -20,14 +22,16 @@ from crypto.rsa_crypto import RsaCryptoAPI
 from models import get_model, train, test
 
 class SymClient(fl.client.Client):
-    def __init__(self, cid, dl_train, dl_val, device=None, straggler_prob: float=0, proximal_mu: float=0) -> None:
+    def __init__(
+            self, cid, dl_train, dl_val, device=None,
+            straggler_sched: ndarray=[], proximal_mu: float=0) -> None:
         super().__init__()
         self.cid = cid
         self.dl_train = dl_train
         self.dl_val = dl_val
         self.device = device
         self.model = get_model()
-        self.straggler_prob = straggler_prob
+        self.straggler_sched = straggler_sched
         self.proximal_mu = proximal_mu
 
         if device:
@@ -73,9 +77,12 @@ class SymClient(fl.client.Client):
         aes_key = RsaCryptoAPI.decrypt_aes_key(ins.config['private_key_pem'], ins.config['enc_key'])
         self.set_parameters(ins.parameters, aes_key)
 
-        is_straggler = rd.choices([True, False], weights=[self.straggler_prob, 1 - self.straggler_prob], k=1)[0]
+        is_straggler = 0
+        if ins.config['curr_round'] > 0 and len(self.straggler_sched) > 0:
+            sv_round = (int(ins.config['curr_round']) - 1) % len(self.straggler_sched)
+            is_straggler = self.straggler_sched[sv_round].item()
 
-        if not is_straggler:
+        if is_straggler == 0:
             log(INFO, f'Client {self.cid} training')
 
             # define optimizer

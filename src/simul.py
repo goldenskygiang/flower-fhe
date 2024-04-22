@@ -5,6 +5,8 @@ from typing import List, Optional
 import flwr as fl
 import torch
 
+# NOT WORKING RIGHT NOW !!!
+
 # https://docs.python-guide.org/writing/structure/
 # originally to be put outside src folder for other modules to call but ray fails
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))

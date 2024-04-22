@@ -140,6 +140,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
             ins.config['crypto_context'] = self.cc
             ins.config['public_key'] = self.pubkey
             ins.config['secret_key'] = self.seckey
+            ins.config['curr_round'] = server_round
 
         return fit_config
 
