@@ -27,10 +27,20 @@ def init_arguments():
                         help='Number of server rounds (default is 5)')
     
     data_group = parser.add_argument_group('Data Configuration')
+    data_group.add_argument('--ds', choices=['pascal', 'cifar'], required=True,
+                            help='Dataset name (pascal or cifar)')
     data_group.add_argument('--data_path', type=str, required=True,
-                        help='Path to data folder')
+                            help='Path to data folder')
+    data_group.add_argument('--num_partitions', type=int, default=100, 
+                            help='Number of data partitions (default is 100)')
     data_group.add_argument('--batch_size', type=int, default=32, 
                             help='Data batch size (default is 32)')
+    data_group.add_argument('--cid', type=int, required=True,
+                            help='Client ID (must be a non-negative integer in the range [0, num_partitions) )')
+    data_group.add_argument('--cifar_ver', type=str, default='10',
+                            help='CIFAR dataset version (optional, default is 10)')
+    data_group.add_argument('--cifar_val_split', type=float, default=0.15,
+                            help='CIFAR dataset validation split size (default is 0.15)')
     
     fedprox_group = parser.add_argument_group('FedProx Configuration')
     fedprox_group.add_argument('--straggler_prob', type=fraction_validator, default=0,
@@ -48,9 +58,12 @@ def init_arguments():
     if args.host and args.localhost:
         parser.error("Conflicting options: --host and --localhost cannot be used together.")
 
+    if args.cid < 0 or args.cid >= args.num_partitions:
+        parser.error("Invalid client ID, must be an integer in the range [0, num_partitions)")
+
     return args
 
-def generate_client_fn(dl_trains, dl_vals, fhe: bool, device=None,
+def generate_client_fn(dl_train, dl_val, fhe: bool, device=None,
                        num_rounds = 5,
                        straggler_prob: float = 0,
                        proximal_mu: float = 0):
@@ -58,18 +71,18 @@ def generate_client_fn(dl_trains, dl_vals, fhe: bool, device=None,
     from fl_clients.sym_client import SymClient
 
     straggler_schedule = np.random.choice(
-        [0, 1], size=(num_rounds), p=[1 - straggler_prob, straggler_prob])
+        [0, 1], size=(num_rounds), p=[1 - straggler_prob, straggler_prob]).tolist()
+    
+    log(INFO, f"Straggler schedule: {straggler_schedule}")
     
     def client_fn(cid: str):
         cid = int(cid)
-        train_dl = dl_trains[cid] if isinstance(dl_trains, list) else dl_trains
-        eval_dl = dl_vals[cid] if isinstance(dl_vals, list) else dl_vals
 
         if fhe:
             return FheClient(
                 cid=cid,
-                dl_train=train_dl,
-                dl_val=eval_dl,
+                dl_train=dl_train,
+                dl_val=dl_val,
                 device=device,
                 straggler_sched=straggler_schedule,
                 proximal_mu=proximal_mu
@@ -77,8 +90,8 @@ def generate_client_fn(dl_trains, dl_vals, fhe: bool, device=None,
         else:
             return SymClient(
                 cid=cid,
-                dl_train=train_dl,
-                dl_val=eval_dl,
+                dl_train=dl_train,
+                dl_val=dl_val,
                 device=device,
                 straggler_sched=straggler_schedule,
                 proximal_mu=proximal_mu
@@ -121,24 +134,31 @@ def measure_current_process_stats(metrics_data: list, localhost: bool):
         time.sleep(1)
 
 def run_client(
+        cid: int,
         server_addr: str,
+        ds_name: str,
         data_path: str,
+        num_partitions: int,
         batch_size: int,
         gpu: bool,
         mode: str,
         num_rounds: int,
         straggler_prob: float = 0,
-        proximal_mu: float = 0):
+        proximal_mu: float = 0,
+        cifar_ver: str='10',
+        cifar_val_split: float=0.15):
     
     import torch
     import flwr as fl
-    from dataset import prep_data
-    from torch.utils.data import DataLoader
+    from dataset import prep_data_decentralized
 
-    dl_train, dl_val, dl_test = prep_data(data_path=data_path)
-
-    dl_train = DataLoader(dl_train, batch_size=batch_size)
-    dl_val = DataLoader(dl_val, batch_size=batch_size)
+    dl_train, dl_val, _ = prep_data_decentralized(
+        ds_name=ds_name, data_path=data_path,
+        num_partitions=num_partitions, batch_size=batch_size,
+        cifar_ver=cifar_ver, cifar_val_split=cifar_val_split)
+    
+    dl_train = dl_train[cid]
+    dl_val = dl_val[cid]
     
     if gpu:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -151,7 +171,8 @@ def run_client(
     log(INFO, f'Using device: {device}')
     
     client_fn = generate_client_fn(
-        dl_train, dl_val, mode == 'fhe', device, num_rounds, straggler_prob, proximal_mu)
+        dl_train, dl_val, mode == 'fhe',
+        device, num_rounds, straggler_prob, proximal_mu)
 
     log(INFO, f"Client connecting to server at {server_addr}")
 
@@ -174,12 +195,13 @@ if __name__ == '__main__':
     metrics_thread.start()
 
     run_client(
-        server_addr, args.data_path, args.batch_size, args.gpu,
-        args.mode, args.num_rounds, args.straggler_prob, args.proximal_mu)
+        args.cid, server_addr, args.ds, args.data_path, args.num_partitions, args.batch_size, args.gpu,
+        args.mode, args.num_rounds, args.straggler_prob, args.proximal_mu,
+        args.cifar_ver, args.cifar_val_split)
     
     stop_event.set()
     metrics_thread.join()
 
     metrics_df = pd.DataFrame(metrics_data)
-    metrics_filename = f"{time.time()}_{args.mode}_SVR-{args.num_rounds}_SP-{args.straggler_prob}_PM-{args.proximal_mu}.csv"
+    metrics_filename = f"{time.time()}_{args.mode}_C{args.cid}_SVR-{args.num_rounds}_SP-{args.straggler_prob}_PM-{args.proximal_mu}.csv"
     metrics_df.to_csv(metrics_filename, index=False)

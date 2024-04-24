@@ -2,7 +2,7 @@ from crypto.fhe_crypto import FheCryptoAPI
 from models import get_model
 
 from typing import Callable, Dict, List, Optional, Tuple, Union
-from logging import WARNING
+from logging import INFO, WARNING
 
 import flwr as fl
 from flwr.common.logger import log
@@ -45,6 +45,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
         initial_parameters: Optional[Parameters] = None,
         fit_metrics_aggregation_fn: Optional[MetricsAggregationFn] = None,
         evaluate_metrics_aggregation_fn: Optional[MetricsAggregationFn] = None,
+        dataset_name: str = None
     ) -> None:
         """FedAvg strategy integrated with Fully Homomorphic Encryption.
 
@@ -80,6 +81,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
 
         self.model = get_model()
         self.init_stage = True
+        self.dataset_name = dataset_name
 
         self.cc, self.pubkey, self.seckey = FheCryptoAPI.create_crypto_context_and_keys()
 
@@ -141,6 +143,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
             ins.config['public_key'] = self.pubkey
             ins.config['secret_key'] = self.seckey
             ins.config['curr_round'] = server_round
+            ins.config['ds'] = self.dataset_name
 
         return fit_config
 
@@ -157,6 +160,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
             ins.config['crypto_context'] = self.cc
             ins.config['public_key'] = self.pubkey
             ins.config['secret_key'] = self.seckey
+            ins.config['ds'] = self.dataset_name
 
         return eval_config
 

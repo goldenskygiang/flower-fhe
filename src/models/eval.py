@@ -4,7 +4,7 @@ from models import get_model, test
 
 import torch
 
-def get_evaluation_fn(dl_test, device=None):
+def get_evaluation_fn(ds_name: str, dl_test, device=None):
     '''
     Returns a function. The returned eval_fn() will be executed
     by the strategy at the end of each round to evaluate the
@@ -31,7 +31,7 @@ def get_evaluation_fn(dl_test, device=None):
         model.load_state_dict(state_dict, strict=True)
 
         # call test
-        loss, accuracy = test(model, dl_test, device)
+        loss, accuracy = test(ds_name, model, dl_test, device)
         return loss, {'accuracy': accuracy}
 
     return evaluate_fn

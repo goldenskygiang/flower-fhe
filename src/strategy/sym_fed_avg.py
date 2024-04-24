@@ -47,6 +47,7 @@ class SymFedAvg(fl.server.strategy.FedAvg):
         initial_parameters: Optional[Parameters] = None,
         fit_metrics_aggregation_fn: Optional[MetricsAggregationFn] = None,
         evaluate_metrics_aggregation_fn: Optional[MetricsAggregationFn] = None,
+        dataset_name: str = None
     ) -> None:
         """FedAvg strategy with symmmetric encryption
 
@@ -82,6 +83,7 @@ class SymFedAvg(fl.server.strategy.FedAvg):
 
         self.model = get_model()
         self.init_stage = True
+        self.dataset_name = dataset_name
 
         self.__aes_key = RsaCryptoAPI.gen_aes_key()
 
@@ -147,6 +149,7 @@ class SymFedAvg(fl.server.strategy.FedAvg):
                 self.__aes_key, public_key_pem)
             fit_ins.config['private_key_pem'] = private_key_pem
             fit_ins.config['curr_round'] = server_round
+            fit_ins.config['ds'] = self.dataset_name
 
         return fit_config
 
@@ -164,6 +167,7 @@ class SymFedAvg(fl.server.strategy.FedAvg):
             ins.config['enc_key'] = RsaCryptoAPI.encrypt_aes_key(
                 self.__aes_key, public_key_pem)
             ins.config['private_key_pem'] = private_key_pem
+            ins.config['ds'] = self.dataset_name
 
         return eval_config
 

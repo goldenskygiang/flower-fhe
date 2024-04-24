@@ -23,7 +23,7 @@ from models import get_model, train, test
 class FheClient(fl.client.Client):
     def __init__(
             self, cid, dl_train, dl_val, device=None,
-            straggler_sched: ndarray=[], proximal_mu: float=0) -> None:
+            straggler_sched: list[int]=[], proximal_mu: float=0) -> None:
         super().__init__()
         self.cid = cid
         self.dl_train = dl_train
@@ -79,6 +79,7 @@ class FheClient(fl.client.Client):
         this client's dataset. At the end, the params (locally
         trained) are comminucated back to the server)
         '''
+        log(INFO, f"Start training round {ins.config['curr_round']}")
 
         # copy params from server
         self.set_parameters(ins.parameters, ins.config)
@@ -86,7 +87,7 @@ class FheClient(fl.client.Client):
         is_straggler = 0
         if ins.config['curr_round'] > 0 and len(self.straggler_sched) > 0:
             sv_round = (int(ins.config['curr_round']) - 1) % len(self.straggler_sched)
-            is_straggler = self.straggler_sched[sv_round].item()
+            is_straggler = self.straggler_sched[sv_round]
 
         if is_straggler == 0:
             log(INFO, f'Client {self.cid} training')
@@ -98,9 +99,10 @@ class FheClient(fl.client.Client):
             ])
 
             # local training
-            train(self.model, self.dl_train, optim, epochs=1, device=self.device, proximal_mu=self.proximal_mu)
+            train(ins.config['ds'], self.model, self.dl_train, optim, epochs=1,
+                  device=self.device, proximal_mu=self.proximal_mu)
         else:
-            log(WARNING, f'Client {self.cid} is a straggler in this round')
+            log(WARNING, f"Client {self.cid} is a straggler in round {ins.config['curr_round']}")
 
         # return model's params to the server, as well as extra info (number of training samples)
         get_param_ins = GetParametersIns(config={
@@ -124,7 +126,7 @@ class FheClient(fl.client.Client):
 
         self.set_parameters(ins.parameters, ins.config)
 
-        loss, accuracy = test(self.model, self.dl_val, device=self.device)
+        loss, accuracy = test(ins.config['ds'], self.model, self.dl_val, device=self.device)
 
         # send back to server
         return EvaluateRes(

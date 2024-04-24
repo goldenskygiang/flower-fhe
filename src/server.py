@@ -7,8 +7,6 @@ def init_arguments():
 
     parser.add_argument('--mode', choices=['fhe', 'sym'], required=True,
                         help='Choose either Fully Homomorphic Encryption (fhe) or Symmetric Encryption (sym) mode')
-    # parser.add_argument('--https', action='store_true',
-    #                     help='Enable HTTPS (optional)')
     parser.add_argument('--gpu', action='store_true',
                         help='Enable GPU for global evaluation (optional)')
     parser.add_argument('--localhost', action='store_true',
@@ -17,12 +15,18 @@ def init_arguments():
                         help='Port number (default is 8080)')
     
     data_group = parser.add_argument_group('Data Configuration')
+    data_group.add_argument('--ds', choices=['pascal', 'cifar'], required=True,
+                            help='Dataset name (pascal or cifar)')
     data_group.add_argument('--data_path', type=str, required=True,
-                        help='Path to data folder')
+                            help='Path to data folder')
     data_group.add_argument('--num_partitions', type=int, default=100, 
                             help='Number of data partitions (default is 100)')
     data_group.add_argument('--batch_size', type=int, default=32, 
                             help='Data batch size (default is 32)')
+    data_group.add_argument('--cifar_ver', type=str, default='10',
+                            help='CIFAR dataset version (optional, default is 10)')
+    data_group.add_argument('--cifar_val_split', type=float, default=0.15,
+                            help='CIFAR dataset validation split size (default is 0.15)')
     
     fl_group = parser.add_argument_group('Federated Learning Configuration')
     fl_group.add_argument('--server_rounds', type=int, default=5, 
@@ -54,7 +58,9 @@ if __name__ == '__main__':
     from strategy.sym_fed_avg import SymFedAvg
 
     dl_train, dl_val, dl_test = prep_data_decentralized(
-        data_path=args.data_path, num_partitions=args.num_partitions, batch_size=args.batch_size)
+        ds_name=args.ds, data_path=args.data_path,
+        num_partitions=args.num_partitions, batch_size=args.batch_size,
+        cifar_ver=args.cifar_ver, cifar_val_split=args.cifar_val_split)
     
     if args.gpu:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -73,7 +79,8 @@ if __name__ == '__main__':
             min_available_clients=args.min_available_clients,
             min_evaluate_clients=args.min_evaluate_clients,
             min_fit_clients=args.min_fit_clients,
-            evaluate_fn=get_evaluation_fn(dl_test, device)
+            evaluate_fn=get_evaluation_fn(args.ds, dl_test, device),
+            dataset_name=args.ds
         )
     elif args.mode == 'sym':
         strategy = SymFedAvg(
@@ -82,7 +89,8 @@ if __name__ == '__main__':
             min_available_clients=args.min_available_clients,
             min_evaluate_clients=args.min_evaluate_clients,
             min_fit_clients=args.min_fit_clients,
-            evaluate_fn=get_evaluation_fn(dl_test, device)
+            evaluate_fn=get_evaluation_fn(args.ds, dl_test, device),
+            dataset_name=args.ds
         )
 
     server_addr = f"127.0.0.1:{args.port}" if args.localhost else f"0.0.0.0:{args.port}"
