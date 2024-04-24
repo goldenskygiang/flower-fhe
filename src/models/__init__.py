@@ -45,7 +45,11 @@ class Classifier(nn.Module, ABC):
     def _classify(self, y_proba: Tensor) -> Tensor:
         pass
 
-class MultiLabelClassifier(Classifier):
+class BinaryClassifier(Classifier):
+    '''
+    Used for BINARY classification (also works for multi-label)
+    Label y_i = [0/1] * n_classes
+    '''
     def __init__(self, model, threshold: float = 0.5):
         super().__init__(model)
         self.threshold = threshold
@@ -53,32 +57,86 @@ class MultiLabelClassifier(Classifier):
     def _classify(self, y_proba: Tensor):
         return (y_proba > self.threshold).type(torch.float32)
 
-def get_model(num_classes=20, threshold=0.5):
-    mobilenet = torchvision.models.mobilenet_v2(weights='IMAGENET1K_V1')
+class MultiClassClassifier(Classifier):
+    '''
+    Used for MULTICLASS classification
+    Label y_i = [0 / 1 / ... / n_classes - 1]
+    '''
+    def __init__(self, model):
+        super().__init__(model)
 
-    for p in mobilenet.parameters():
+    def _classify(self, y_proba: Tensor):
+        return torch.argmax(y_proba, dim=1)
+
+
+def get_model(ds: str='pascal', num_classes: int=20, threshold: float=0.5, model_choice: str='mobilenet', dropout: float=0.4):
+    '''
+    Args:
+        @ds           -- The dataset / task for the model.
+                         If 'pascal' => Multi-label classification, num_classes=20
+                         if 'cifar'  => Multi-class classification, num_classes=[10, 100]
+        @num_classes  -- Number of output classes. 20 for PascalVOC multilabel, [10, 100] for Cifar multiclass
+        @threshold    -- Prediction threshold for Binary Classification (or multi-label)
+        @model_choice -- The backbone CNN model. Either 'mobilenet' or 'resnet' atm
+        @dropout      -- Dropout probability for the classification head's dropout layer
+
+    Returns:
+        @model        -- torch.nn.Module() model
+    '''
+    model = None
+    in_features = 0
+
+    if ds == 'pascal':
+        assert num_classes==20, "Pascal VOC Dataset requires num_classes=20"
+    if ds == 'cifar':
+        assert num_classes==10 or num_classes==100, "Cifar Dataset requires num_classes either 10 or 100"
+
+    if model_choice == 'mobilenet':
+        model = torchvision.models.mobilenet_v2(weights='IMAGENET1K_V1')
+        in_features = model.classifier[1].in_features
+
+    else: # only resnet atm
+        model = torchvision.models.resnet18(weights='IMAGENET1K_V1')
+        # model.avgpool = torch.nn.AdaptiveAvgPool2d(1)
+        # model.fc = nn.Sequential(nn.Dropout(0.2),
+        #                         nn.Linear(model.fc.in_features, 64),
+        #                         nn.ReLU(),
+        #                         nn.Linear(64, num_classes))
+        in_features = model.fc.in_features
+
+    ## Freeze all pretrained layers
+    for p in model.parameters():
         p.requires_grad = False
-
-    in_features = mobilenet.classifier[1].in_features
-    #num_classes = 20  # Number of classes for multi-label classification
 
     classifier = nn.Sequential(
         nn.Linear(in_features, 256),
-        # nn.Conv2d(in_features, 256, kernel_size=1),
         nn.ReLU(),
-        nn.Dropout(0.4),
+        nn.Dropout(dropout),
         nn.Linear(256, num_classes),
         #nn.Sigmoid()  # Sigmoid is in either the loss fn or the wrapper class
     )
 
-    mobilenet.classifier = classifier
+    ## Replaces classification head
+    if model_choice == 'mobilenet':
+        model.classifier = classifier
+    else: # resnet atm
+        model.fc = classifier
 
-    mobilenet = MultiLabelClassifier(mobilenet, threshold=threshold)
+    ## Implements model.classify() method
+    if ds == 'pascal':
+        model = BinaryClassifier(model, threshold=threshold)
+    else: # 'cifar
+        model = MultiClassClassifier(model)
 
-    return mobilenet
+    return model
 
-def train(model, dl_train, optimizer, epochs, device=None, proximal_mu: float=0):
-    criterion = nn.BCEWithLogitsLoss(reduction='sum')
+
+# Standard Train / Test loop for MultiLabel Task
+def train(ds, model, dl_train, optimizer, epochs, device=None, proximal_mu: float=0):
+    if ds == 'pascal':
+        criterion = nn.BCEWithLogitsLoss(reduction='sum') # For multilabel classification
+    else: # 'cifar'
+        criterion = nn.CrossEntropyLoss() # For multiclass classification
 
     if device:
         model.to(device)
@@ -89,50 +147,161 @@ def train(model, dl_train, optimizer, epochs, device=None, proximal_mu: float=0)
 
     for epoch in range(epochs):
         total_loss = 0.0
+        num_correct = 0
 
-        # Wrap your DataLoader with tqdm for a progress bar
         for batch_idx, (X, y) in enumerate(tqdm(dl_train, desc=f'Epoch {epoch + 1}/{epochs}')):
             if device:
                 X, y = X.to(device), y.to(device)
+
             optimizer.zero_grad()
 
             proximal_term = 0.0
             for local_w, global_w in zip(model.parameters(), global_params):
                 proximal_term += torch.square((local_w - global_w).norm(2))
 
-            y_scores = model(X)
+            y_scores = model(X) # forward
             loss = criterion(y_scores, y) + (proximal_mu / 2) * proximal_term
-            loss.backward()
+            loss.backward() # backward
             optimizer.step()
             total_loss += loss.item()
 
-        # Calculate the average loss for the epoch
-        average_loss = total_loss / len(dl_train)
+            # Acc
+            y_pred = model.classify_scores(y_scores)
+            if ds == 'pascal':
+                y_pred = y_pred.cpu().numpy()
+                y = y.cpu().numpy()
+                num_correct += np.sum(y_pred == y)
+            else:
+                num_correct += torch.sum(y_pred == y).item()
 
-        print(f"Epoch {epoch + 1}/{epochs}, Loss: {average_loss:.4f}")
+        # Average loss for the epoch
+        average_loss = total_loss / len(dl_train)
+        # Average accuracy
+        if ds == 'pascal':
+            accuracy = np.sum(num_correct) / (len(dl_train) * 20) # 20: n_classes
+        else:
+            accuracy = num_correct / len(dl_train)
+
+        print(f"Epoch {epoch + 1}/{epochs}, Loss: {average_loss:.4f}, Acc: {accuracy:.4f}")
 
     return model
 
-def test(model, dl_test, device=None):
-    criterion = nn.BCEWithLogitsLoss(reduction='sum')
+
+def test(ds, model, dl_test, device=None):
+    if ds == 'pascal':
+        criterion = nn.BCEWithLogitsLoss(reduction='sum')
+    else: # 'cifar'
+        criterion = nn.CrossEntropyLoss()
+
     num_correct, loss = 0, 0.0
+
     if device:
         model.to(device)
     model.eval()
 
     with torch.no_grad():
-        for (x, y) in dl_test:
+        for (X, y) in dl_test:
             if device:
-                x, y = x.to(device), y.to(device)
-            y_scores = model(x)
+                X, y = X.to(device), y.to(device)
+
+            y_scores = model(X)
             loss += criterion(y_scores, y).item()
 
             y_pred = model.classify_scores(y_scores)
-            y_pred = y_pred.cpu().numpy()
-            y = y.cpu().numpy()
-            num_correct += np.sum(y_pred == y)
+            if ds == 'pascal':
+                y_pred = y_pred.cpu().numpy()
+                y = y.cpu().numpy()
+                num_correct += np.sum(y_pred == y)
+            else:
+                num_correct += torch.sum(y_pred == y).item()
 
     # avg_loss = sum(losses) / num_batches
-    accuracy = 100.0 * np.sum(num_correct) / (len(dl_test.dataset) * 20) # 20: n_classes
+    if ds == 'pascal':
+        accuracy = np.sum(num_correct) / (len(dl_test.dataset) * 20) # 20: n_classes
+    else: # 'cifar'
+        accuracy = num_correct / len(dl_test)
     #accuracy = correct / len(dl_test.dataset)
     return loss, accuracy
+
+
+# Standard Train / Test loop for CIFAR
+# def train_cifar(model, dl_train, optimizer, epochs, device=None):
+#     criterion = nn.CrossEntropyLoss()
+
+#     if device:
+#         model = model.to(device)
+#     model.train()
+
+#     for epoch in range(epochs):
+#         total_loss = 0.0
+#         num_correct = 0
+
+#         for batch_idx, (X, y) in enumerate(tqdm(dl_train, desc=f'Epoch {epoch + 1}/{epochs}')):
+#             if device:
+#                 X, y = X.to(device), y.to(device)
+
+#             optimizer.zero_grad()
+
+#             y_scores = model(X) # forward
+#             loss = criterion(y_scores, y)
+#             loss.backward() # backward
+#             optimizer.step()
+#             total_loss += loss.item()
+
+#             y_pred = model.classify_scores(y_scores)
+#             num_correct += torch.sum(y_pred == y).item()
+#             #print(f'{num_correct} -')
+#             #print(f'{y_pred==y} -')
+
+#         # Calculate the average loss for the epoch
+#         average_loss = total_loss / len(dl_train)
+#         acc = num_correct / len(dl_train)
+
+#         print(f"Epoch {epoch + 1}/{epochs}, Loss: {average_loss:.4f}, Acc: {acc:.4f}")
+
+#     return model
+
+# def test_cifar(model, dl_test, device=None):
+#     criterion = nn.CrossEntropyLoss()
+
+#     num_correct, loss = 0, 0.0
+
+#     if device:
+#         model.to(device)
+#     model.eval()
+
+#     with torch.no_grad():
+#         for (X, y) in dl_test:
+#             if device:
+#                 X, y = X.to(device), y.to(device)
+
+#             y_scores = model(X) # forward
+#             loss += criterion(y_scores, y).item()
+
+#             y_pred = model.classify_scores(y_scores)
+#             num_correct += torch.sum(y_pred == y).item()
+
+#     accuracy = num_correct / len(dl_test)
+#     return loss, accuracy
+
+# def run_centralised_cifar(epochs: int, lr: float, momentum: float=0.9):
+#     model = models.get_model_cifar()
+
+#     # define optimizer
+#     optim = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum)
+
+#     # get dataset, construct ds and dl
+#     train_dl = DataLoader(train_ds, batch_size=128, shuffle=True, num_workers=2)
+#     test_dl = DataLoader(test_ds, batch_size=128, shuffle=False, num_workers=2)
+
+#     # train loop
+#     trained_model = train_cifar(model, train_dl, optim, epochs)
+
+#     # evaluate after training
+#     loss, accuracy = test_cifar(model, test_dl)
+#     print(f"{loss=}")
+#     print(f"{accuracy=}")
+
+#     return trained_model
+
+# trained_model = run_centralised_cifar(epochs=30, lr=0.01)
