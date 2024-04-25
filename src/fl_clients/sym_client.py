@@ -2,7 +2,7 @@ from collections import OrderedDict
 from logging import INFO, WARNING
 
 import random as rd
-from typing import List
+from typing import Callable, List
 from numpy import ndarray
 import torch
 import flwr as fl
@@ -19,18 +19,18 @@ from flwr.common import (
     Code)
 
 from crypto.rsa_crypto import RsaCryptoAPI
-from models import get_model, train, test
+from models import train, test
 
 class SymClient(fl.client.Client):
     def __init__(
-            self, cid, dl_train, dl_val, device=None,
+            self, cid, dl_train, dl_val, init_model_fn: Callable, device=None,
             straggler_sched: list[int]=[], proximal_mu: float=0) -> None:
         super().__init__()
         self.cid = cid
         self.dl_train = dl_train
         self.dl_val = dl_val
         self.device = device
-        self.model = get_model()
+        self.model = init_model_fn()
         self.straggler_sched = straggler_sched
         self.proximal_mu = proximal_mu
 

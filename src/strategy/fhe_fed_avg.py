@@ -1,5 +1,4 @@
 from crypto.fhe_crypto import FheCryptoAPI
-from models import get_model
 
 from typing import Callable, Dict, List, Optional, Tuple, Union
 from logging import INFO, WARNING
@@ -27,6 +26,7 @@ than or equal to the values of `min_fit_clients` and `min_evaluate_clients`.
 class FheFedAvg(fl.server.strategy.FedAvg):
     def __init__(
         self,
+        init_model_fn: Callable,
         *,
         fraction_fit: float = 1.0,
         fraction_evaluate: float = 1.0,
@@ -79,7 +79,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
         ):
             log(WARNING, WARNING_MIN_AVAILABLE_CLIENTS_TOO_LOW)
 
-        self.model = get_model()
+        self.model = init_model_fn()
         self.init_stage = True
         self.dataset_name = dataset_name
 

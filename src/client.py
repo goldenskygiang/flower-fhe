@@ -1,5 +1,6 @@
 import argparse
 import os
+from typing import Callable
 import pandas as pd
 import threading
 import time
@@ -7,6 +8,7 @@ import psutil
 from flwr.common.logger import log
 from logging import INFO, WARNING
 import numpy as np
+from models import generate_model_fn
 from utils.args_validator import port_number_validator, host_validator, fraction_validator
 
 def init_arguments():
@@ -25,6 +27,16 @@ def init_arguments():
                         help='Port number (default is 8080)')
     parser.add_argument('--num_rounds', type=int, default=5,
                         help='Number of server rounds (default is 5)')
+    
+    model_group = parser.add_argument_group('Model Configuration')
+    model_group.add_argument('--num_classes', type=int, default=20,
+                             help='Number of output classes. 20 for PascalVOC multilabel, [10, 100] for Cifar multiclass')
+    model_group.add_argument('--threshold', type=float, default=0.5,
+                             help='Prediction threshold for Binary Classification (or multi-label)')
+    model_group.add_argument('--model_choice', choices=['mobilenet', 'resnet'], default='mobilenet',
+                             help="The backbone CNN model. Either 'mobilenet' or 'resnet' atm")
+    model_group.add_argument('--dropout', type=float, default=0.4,
+                             help="Dropout probability for the classification head's dropout layer")
     
     data_group = parser.add_argument_group('Data Configuration')
     data_group.add_argument('--ds', choices=['pascal', 'cifar'], required=True,
@@ -63,7 +75,8 @@ def init_arguments():
 
     return args
 
-def generate_client_fn(dl_train, dl_val, fhe: bool, device=None,
+def generate_client_fn(dl_train, dl_val, fhe: bool, init_model_fn: Callable,
+                       device=None,
                        num_rounds = 5,
                        straggler_prob: float = 0,
                        proximal_mu: float = 0):
@@ -85,7 +98,8 @@ def generate_client_fn(dl_train, dl_val, fhe: bool, device=None,
                 dl_val=dl_val,
                 device=device,
                 straggler_sched=straggler_schedule,
-                proximal_mu=proximal_mu
+                proximal_mu=proximal_mu,
+                init_model_fn=init_model_fn
             )
         else:
             return SymClient(
@@ -94,7 +108,8 @@ def generate_client_fn(dl_train, dl_val, fhe: bool, device=None,
                 dl_val=dl_val,
                 device=device,
                 straggler_sched=straggler_schedule,
-                proximal_mu=proximal_mu
+                proximal_mu=proximal_mu,
+                init_model_fn=init_model_fn
             )
 
     return client_fn
@@ -146,7 +161,11 @@ def run_client(
         straggler_prob: float = 0,
         proximal_mu: float = 0,
         cifar_ver: str='10',
-        cifar_val_split: float=0.15):
+        cifar_val_split: float=0.15,
+        num_classes: int=20,
+        threshold: float=0.5,
+        model_choice: str='mobilenet',
+        dropout: float=0.4):
     
     import torch
     import flwr as fl
@@ -169,9 +188,17 @@ def run_client(
         device = torch.device('cpu')
 
     log(INFO, f'Using device: {device}')
+
+    init_model_fn = generate_model_fn(
+        ds=ds_name,
+        num_classes=num_classes,
+        threshold=threshold,
+        model_choice=model_choice,
+        dropout=dropout,
+    )
     
     client_fn = generate_client_fn(
-        dl_train, dl_val, mode == 'fhe',
+        dl_train, dl_val, mode == 'fhe', init_model_fn,
         device, num_rounds, straggler_prob, proximal_mu)
 
     log(INFO, f"Client connecting to server at {server_addr}")
@@ -197,11 +224,12 @@ if __name__ == '__main__':
     run_client(
         args.cid, server_addr, args.ds, args.data_path, args.num_partitions, args.batch_size, args.gpu,
         args.mode, args.num_rounds, args.straggler_prob, args.proximal_mu,
-        args.cifar_ver, args.cifar_val_split)
+        args.cifar_ver, args.cifar_val_split,
+        args.num_classes, args.threshold, args.model_choice, args.dropout)
     
     stop_event.set()
     metrics_thread.join()
 
     metrics_df = pd.DataFrame(metrics_data)
-    metrics_filename = f"{time.time()}_{args.mode}_C{args.cid}_SVR-{args.num_rounds}_SP-{args.straggler_prob}_PM-{args.proximal_mu}.csv"
+    metrics_filename = f"exp_{int(time.time())}_{args.mode}_C{args.cid}_SVR-{args.num_rounds}_SP-{args.straggler_prob}_PM-{args.proximal_mu}.csv"
     metrics_df.to_csv(metrics_filename, index=False)

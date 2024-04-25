@@ -1,4 +1,5 @@
 import argparse
+from models import generate_model_fn
 from utils.args_validator import fraction_validator, port_number_validator
 
 def init_arguments():
@@ -14,6 +15,16 @@ def init_arguments():
     parser.add_argument('--port', type=port_number_validator, default=8080,
                         help='Port number (default is 8080)')
     
+    model_group = parser.add_argument_group('Model Configuration')
+    model_group.add_argument('--num_classes', type=int, default=20,
+                             help='Number of output classes. 20 for PascalVOC multilabel, [10, 100] for Cifar multiclass')
+    model_group.add_argument('--threshold', type=float, default=0.5,
+                             help='Prediction threshold for Binary Classification (or multi-label)')
+    model_group.add_argument('--model_choice', choices=['mobilenet', 'resnet'], default='mobilenet',
+                             help="The backbone CNN model. Either 'mobilenet' or 'resnet' atm")
+    model_group.add_argument('--dropout', type=float, default=0.4,
+                             help="Dropout probability for the classification head's dropout layer")
+
     data_group = parser.add_argument_group('Data Configuration')
     data_group.add_argument('--ds', choices=['pascal', 'cifar'], required=True,
                             help='Dataset name (pascal or cifar)')
@@ -72,24 +83,34 @@ if __name__ == '__main__':
 
     log(INFO, f'Using device: {device}')
 
+    init_model_fn = generate_model_fn(
+        ds=args.ds,
+        num_classes=args.num_classes,
+        threshold=args.threshold,
+        model_choice=args.model_choice,
+        dropout=args.dropout,
+    )
+
     if args.mode == 'fhe':
         strategy = FheFedAvg(
+            init_model_fn=init_model_fn,
             fraction_fit=args.fraction_fit,
             fraction_evaluate=args.fraction_evaluate,
             min_available_clients=args.min_available_clients,
             min_evaluate_clients=args.min_evaluate_clients,
             min_fit_clients=args.min_fit_clients,
-            evaluate_fn=get_evaluation_fn(args.ds, dl_test, device),
+            evaluate_fn=get_evaluation_fn(args.ds, dl_test, init_model_fn, device),
             dataset_name=args.ds
         )
     elif args.mode == 'sym':
         strategy = SymFedAvg(
+            init_model_fn=init_model_fn,
             fraction_fit=args.fraction_fit,
             fraction_evaluate=args.fraction_evaluate,
             min_available_clients=args.min_available_clients,
             min_evaluate_clients=args.min_evaluate_clients,
             min_fit_clients=args.min_fit_clients,
-            evaluate_fn=get_evaluation_fn(args.ds, dl_test, device),
+            evaluate_fn=get_evaluation_fn(args.ds, dl_test, init_model_fn, device),
             dataset_name=args.ds
         )
 
