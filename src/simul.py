@@ -1,5 +1,7 @@
+import os
 import argparse
-from models import generate_model_fn
+import time
+
 from utils.args_validator import fraction_validator, port_number_validator
 
 def init_arguments():
@@ -30,8 +32,8 @@ def init_arguments():
                             help='Dataset name (pascal or cifar)')
     data_group.add_argument('--data_path', type=str, required=True,
                             help='Path to data folder')
-    data_group.add_argument('--num_partitions', type=int, default=100, 
-                            help='Number of data partitions (default is 100)')
+    data_group.add_argument('--num_partitions', type=int, required=True,
+                            help='Number of data partitions and clients')
     data_group.add_argument('--batch_size', type=int, default=32, 
                             help='Data batch size (default is 32)')
     data_group.add_argument('--cifar_ver', type=str, default='10',
@@ -52,78 +54,51 @@ def init_arguments():
                           help='Minimum number of evaluating clients (default is 2)')
     fl_group.add_argument('--min_fit_clients', type=int, default=2, 
                           help='Minimum number of fitting clients (default is 2)')
+    
+    fedprox_group = parser.add_argument_group('FedProx Configuration')
+    fedprox_group.add_argument('--straggler_prob', type=fraction_validator, default=0,
+                               help='Probability of being a Straggler node (default is 0, limit double value from 0 to 1)')
+    fedprox_group.add_argument('--proximal_mu', type=float, default=0,
+                               help='Proximal mu value (default is 0)')
 
     return parser.parse_args()
 
-def run_server(args):
-    import torch
-    import flwr as fl
-    from flwr.common.logger import log
-    from logging import INFO, WARNING
-
-    from models.eval import get_evaluation_fn
-    from dataset import prep_data_decentralized
-    from strategy.fhe_fed_avg import FheFedAvg
-    from strategy.sym_fed_avg import SymFedAvg
-
-    dl_train, dl_val, dl_test = prep_data_decentralized(
-        ds_name=args.ds, data_path=args.data_path,
-        num_partitions=args.num_partitions, batch_size=args.batch_size,
-        cifar_ver=args.cifar_ver, cifar_val_split=args.cifar_val_split)
-    
-    if args.gpu:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
-        if not(torch.cuda.is_available()):
-            log(WARNING, 'CUDA device is not available. Switching to CPU.')
-    else:
-        device = torch.device('cpu')
-
-    log(INFO, f'Using device: {device}')
-
-    init_model_fn = generate_model_fn(
-        ds=args.ds,
-        num_classes=args.num_classes,
-        threshold=args.threshold,
-        model_choice=args.model_choice,
-        dropout=args.dropout,
-    )
-
-    if args.mode == 'fhe':
-        strategy = FheFedAvg(
-            init_model_fn=init_model_fn,
-            fraction_fit=args.fraction_fit,
-            fraction_evaluate=args.fraction_evaluate,
-            min_available_clients=args.min_available_clients,
-            min_evaluate_clients=args.min_evaluate_clients,
-            min_fit_clients=args.min_fit_clients,
-            evaluate_fn=get_evaluation_fn(args.ds, dl_test, init_model_fn, device),
-            dataset_name=args.ds
-        )
-    elif args.mode == 'sym':
-        strategy = SymFedAvg(
-            init_model_fn=init_model_fn,
-            fraction_fit=args.fraction_fit,
-            fraction_evaluate=args.fraction_evaluate,
-            min_available_clients=args.min_available_clients,
-            min_evaluate_clients=args.min_evaluate_clients,
-            min_fit_clients=args.min_fit_clients,
-            evaluate_fn=get_evaluation_fn(args.ds, dl_test, init_model_fn, device),
-            dataset_name=args.ds
-        )
-
-    server_addr = f"127.0.0.1:{args.port}" if args.localhost else f"0.0.0.0:{args.port}"
-
-    log(INFO, f"Server listening on {server_addr}")
-
-    hist = fl.server.start_server(
-        server_address=server_addr,
-        config=fl.server.ServerConfig(num_rounds=args.server_rounds),
-        strategy=strategy
-    )
-
-    print(f"{hist}")
-
 if __name__ == '__main__':
     args = init_arguments()
-    run_server(args)
+
+    processes = []
+
+    sv_pid = os.fork()
+    if (sv_pid == 0):
+        # run server here
+        from server import run_server
+        run_server(args)
+        exit(0)
+    
+    processes.append(sv_pid)
+
+    time.sleep(10)
+
+    clients = args.num_partitions
+    for i in range(clients):
+        pid = os.fork()
+
+        if (pid == 0):
+            # call client process
+            from client import run_client
+            serv_addr = f"127.0.0.1:{args.port}" if args.localhost else f"0.0.0.0:{args.port}"
+
+            run_client(
+                i, serv_addr, args.ds, args.data_path, args.num_partitions, args.batch_size, args.gpu,
+                args.mode, args.server_rounds, args.straggler_prob, args.proximal_mu,
+                args.cifar_ver, args.cifar_val_split, args.num_classes, args.threshold,
+                args.model_choice, args.dropout)
+            
+            exit(0)
+
+        processes.append(pid)
+
+    for pid in processes:
+        os.waitpid(pid, 0)
+
+    print("*" * 20 + " SIMULATION COMPLETED " + "*" * 20)

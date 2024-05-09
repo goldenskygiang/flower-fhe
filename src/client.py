@@ -206,30 +206,31 @@ def run_client(
     if max(straggler_prob, proximal_mu) > 0:
         log(INFO, f"Client using FedProx with straggler_prob={straggler_prob}, mu={proximal_mu}")
 
+    metrics_data = []
+
+    metrics_thread = threading.Thread(
+        target=measure_current_process_stats,args=(metrics_data, server_addr.startswith("127.0.0.1")))
+    metrics_thread.start()
+
     fl.client.app.start_client(
         server_address=server_addr,
         client_fn=client_fn
     )
+
+    stop_event.set()
+    metrics_thread.join()
+
+    metrics_df = pd.DataFrame(metrics_data)
+    metrics_filename = f"exp_{int(time.time())}_{mode}_C{cid}_SVR-{num_rounds}_SP-{straggler_prob}_PM-{proximal_mu}.csv"
+    metrics_df.to_csv(metrics_filename, index=False)
 
 if __name__ == '__main__':
     args = init_arguments()
 
     server_addr = f"127.0.0.1:{args.port}" if args.localhost else f"{args.host}:{args.port}"
 
-    metrics_data = []
-
-    metrics_thread = threading.Thread(target=measure_current_process_stats, args=(metrics_data, args.localhost))
-    metrics_thread.start()
-
     run_client(
         args.cid, server_addr, args.ds, args.data_path, args.num_partitions, args.batch_size, args.gpu,
         args.mode, args.num_rounds, args.straggler_prob, args.proximal_mu,
         args.cifar_ver, args.cifar_val_split,
         args.num_classes, args.threshold, args.model_choice, args.dropout)
-    
-    stop_event.set()
-    metrics_thread.join()
-
-    metrics_df = pd.DataFrame(metrics_data)
-    metrics_filename = f"exp_{int(time.time())}_{args.mode}_C{args.cid}_SVR-{args.num_rounds}_SP-{args.straggler_prob}_PM-{args.proximal_mu}.csv"
-    metrics_df.to_csv(metrics_filename, index=False)
