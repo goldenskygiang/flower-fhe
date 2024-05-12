@@ -25,6 +25,8 @@ class FheClient(fl.client.Client):
     def __init__(
             self, cid, dl_train, dl_val, init_model_fn: Callable, device=None,
             straggler_sched: list[int]=[], proximal_mu: float=0) -> None:
+        log(INFO, f"FHE client {cid} created")
+
         super().__init__()
         self.cid = cid
         self.dl_train = dl_train
@@ -42,6 +44,7 @@ class FheClient(fl.client.Client):
         Extract all model's params and convert to a list of
         NumPy arrays, then encrypt. Server doesn't work with PyTorch, TF...
         '''
+        log(INFO, "Client GETting params")
         cc = ins.config['crypto_context']
         pubkey = ins.config['public_key']
         
@@ -58,6 +61,8 @@ class FheClient(fl.client.Client):
         With the model's params received from central server,
         decrypt them and overwrite the unintialized model in this class
         '''
+        log(INFO, "Client setting params")
+
         cc = config['crypto_context']
         seckey = config['secret_key']
 
@@ -80,6 +85,7 @@ class FheClient(fl.client.Client):
         this client's dataset. At the end, the params (locally
         trained) are comminucated back to the server)
         '''
+        log(INFO, "FITTING")
         log(INFO, f"Start training round {ins.config['curr_round']}")
 
         # copy params from server

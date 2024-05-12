@@ -72,7 +72,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
         initial_parameters : Parameters, optional
             Initial global model parameters.
         """
-
+        log(INFO, "FHE strategy created")
         if (
             min_fit_clients > min_available_clients
             or min_evaluate_clients > min_available_clients
@@ -102,11 +102,15 @@ class FheFedAvg(fl.server.strategy.FedAvg):
 
     def initialize_parameters(self, client_manager: ClientManager):
         # TODO: Save initial checkpoint
+        log(INFO, "FHE init params")
+
         return Parameters(
             tensors=[v.cpu().numpy() for _, v in self.model.state_dict().items()],
             tensor_type="numpy.ndarrays")
 
     def __decrypt_params(self, parameters: Parameters) -> NDArrays:
+        log(INFO, "FHE decrypt params")
+
         params = zip(parameters.tensors,
                      [v.shape for k, v in self.model.state_dict().items()],
                      [v.dtype for k, v in self.model.state_dict().items()])
@@ -116,10 +120,14 @@ class FheFedAvg(fl.server.strategy.FedAvg):
                 for param, shape, dtype in params]
 
     def __encrypt_params(self, ndarrays: NDArrays) -> Parameters:
+        log(INFO, "FHE encrypt params")
+
         enc_tensors = [FheCryptoAPI.encrypt_numpy_array(self.cc, self.pubkey, arr) for arr in ndarrays]
         return Parameters(tensors=enc_tensors, tensor_type="")
     
     def __secure_aggregate(self, weights_results: List[Tuple[Parameters, int]]) -> Parameters:
+        log(INFO, "FHE secure aggregate")
+
         num_total = sum([cnt for _, cnt in weights_results])
         fractions = [cnt / num_total for _, cnt in weights_results]
         updates = [p.tensors for p, _ in weights_results]
@@ -130,6 +138,8 @@ class FheFedAvg(fl.server.strategy.FedAvg):
     def configure_fit(
             self, server_round: int, parameters: Parameters, client_manager: ClientManager
             ) -> List[Tuple[ClientProxy, FitIns]]:
+        log(INFO, "FHE configure fit")
+
         """Configure the next round of training."""
         if self.init_stage:
             # encrypt all params
@@ -145,11 +155,15 @@ class FheFedAvg(fl.server.strategy.FedAvg):
             ins.config['curr_round'] = server_round
             ins.config['ds'] = self.dataset_name
 
+        log(INFO, "FHE configure fit DONE")
+
         return fit_config
 
     def configure_evaluate(
             self, server_round: int, parameters: Parameters, client_manager: ClientManager
             ) -> List[Tuple[ClientProxy, EvaluateIns]]:
+        log(INFO, "FHE configure eval")
+        
         if self.init_stage:
             parameters = self.__encrypt_params(parameters.tensors)
             self.init_stage = False
@@ -168,6 +182,8 @@ class FheFedAvg(fl.server.strategy.FedAvg):
         self, server_round: int, parameters: Parameters
     ) -> Optional[Tuple[float, Dict[str, Scalar]]]:
         """Evaluate model parameters using an evaluation function."""
+        log(INFO, "FHE evaluate")
+
         if self.evaluate_fn is None:
             # No evaluation function provided
             return None
@@ -191,6 +207,8 @@ class FheFedAvg(fl.server.strategy.FedAvg):
         failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
     ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
         """Aggregate fit results using weighted average."""
+        log(INFO, "FHE aggregate fit")
+
         if not results:
             return None, {}
         # Do not aggregate if there are failures and failures are not accepted

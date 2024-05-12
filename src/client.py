@@ -92,6 +92,7 @@ def generate_client_fn(dl_train, dl_val, fhe: bool, init_model_fn: Callable,
         cid = int(cid)
 
         if fhe:
+            log(INFO, "FHE client creating")
             return FheClient(
                 cid=cid,
                 dl_train=dl_train,
@@ -206,23 +207,23 @@ def run_client(
     if max(straggler_prob, proximal_mu) > 0:
         log(INFO, f"Client using FedProx with straggler_prob={straggler_prob}, mu={proximal_mu}")
 
-    metrics_data = []
+    # metrics_data = []
 
-    metrics_thread = threading.Thread(
-        target=measure_current_process_stats,args=(metrics_data, server_addr.startswith("127.0.0.1")))
-    metrics_thread.start()
+    # metrics_thread = threading.Thread(
+    #     target=measure_current_process_stats,args=(metrics_data, server_addr.startswith("127.0.0.1")))
+    # metrics_thread.start()
 
     fl.client.app.start_client(
         server_address=server_addr,
         client_fn=client_fn
     )
 
-    stop_event.set()
-    metrics_thread.join()
+    # stop_event.set()
+    # metrics_thread.join()
 
-    metrics_df = pd.DataFrame(metrics_data)
-    metrics_filename = f"exp_{int(time.time())}_{mode}_C{cid}_SVR-{num_rounds}_SP-{straggler_prob}_PM-{proximal_mu}.csv"
-    metrics_df.to_csv(metrics_filename, index=False)
+    # metrics_df = pd.DataFrame(metrics_data)
+    # metrics_filename = f"exp_{int(time.time())}_{mode}_C{cid}_SVR-{num_rounds}_SP-{straggler_prob}_PM-{proximal_mu}.csv"
+    # metrics_df.to_csv(metrics_filename, index=False)
 
 if __name__ == '__main__':
     args = init_arguments()
