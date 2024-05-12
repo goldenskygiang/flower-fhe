@@ -112,7 +112,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
                      [v.dtype for k, v in self.model.state_dict().items()])
 
         return [FheCryptoAPI.decrypt_torch_tensor(
-                self.cc, self.seckey, param, dtype, shape, dtype=dtype).cpu().numpy() \
+                self.cc, self.seckey, param, dtype, shape).cpu().numpy() \
                 for param, shape, dtype in params]
 
     def __encrypt_params(self, ndarrays: NDArrays) -> Parameters:
