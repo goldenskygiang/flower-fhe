@@ -27,7 +27,9 @@ def init_arguments():
                         help='Port number (default is 8080)')
     parser.add_argument('--num_rounds', type=int, default=5,
                         help='Number of server rounds (default is 5)')
-    
+    parser.add_argument('--msg_max_sz', type=int, default=2 * 1000 * 1000 * 1000,
+                    help='Maximum gRPC message size in bytes (default is 2147483648 ~ 2GB)')
+
     model_group = parser.add_argument_group('Model Configuration')
     model_group.add_argument('--num_classes', type=int, default=20,
                              help='Number of output classes. 20 for PascalVOC multilabel, [10, 100] for Cifar multiclass')
@@ -144,7 +146,7 @@ def measure_current_process_stats(metrics_data: list, localhost: bool):
             "NetRecv": net_usage_recv
         })
 
-        log(INFO, f"Mem={memory_usage}, NetSent={net_usage_sent}, NetRecv={net_usage_recv}")
+        # log(INFO, f"Mem={memory_usage}, NetSent={net_usage_sent}, NetRecv={net_usage_recv}")
         old_net_info = net_info
 
         time.sleep(1)
@@ -166,7 +168,8 @@ def run_client(
         num_classes: int=20,
         threshold: float=0.5,
         model_choice: str='mobilenet',
-        dropout: float=0.4):
+        dropout: float=0.4,
+        msg_max_sz: int=2000000000):
     
     import torch
     import flwr as fl
@@ -207,23 +210,24 @@ def run_client(
     if max(straggler_prob, proximal_mu) > 0:
         log(INFO, f"Client using FedProx with straggler_prob={straggler_prob}, mu={proximal_mu}")
 
-    # metrics_data = []
+    metrics_data = []
 
-    # metrics_thread = threading.Thread(
-    #     target=measure_current_process_stats,args=(metrics_data, server_addr.startswith("127.0.0.1")))
-    # metrics_thread.start()
+    metrics_thread = threading.Thread(
+        target=measure_current_process_stats,args=(metrics_data, server_addr.startswith("127.0.0.1")))
+    metrics_thread.start()
 
     fl.client.app.start_client(
         server_address=server_addr,
-        client_fn=client_fn
+        client_fn=client_fn,
+        grpc_max_message_length=msg_max_sz
     )
 
-    # stop_event.set()
-    # metrics_thread.join()
+    stop_event.set()
+    metrics_thread.join()
 
-    # metrics_df = pd.DataFrame(metrics_data)
-    # metrics_filename = f"exp_{int(time.time())}_{mode}_C{cid}_SVR-{num_rounds}_SP-{straggler_prob}_PM-{proximal_mu}.csv"
-    # metrics_df.to_csv(metrics_filename, index=False)
+    metrics_df = pd.DataFrame(metrics_data)
+    metrics_filename = f"exp_{int(time.time())}_{mode}_C{cid}_SVR-{num_rounds}_SP-{straggler_prob}_PM-{proximal_mu}.csv"
+    metrics_df.to_csv(metrics_filename, index=False)
 
 if __name__ == '__main__':
     args = init_arguments()
@@ -234,4 +238,4 @@ if __name__ == '__main__':
         args.cid, server_addr, args.ds, args.data_path, args.num_partitions, args.batch_size, args.gpu,
         args.mode, args.num_rounds, args.straggler_prob, args.proximal_mu,
         args.cifar_ver, args.cifar_val_split,
-        args.num_classes, args.threshold, args.model_choice, args.dropout)
+        args.num_classes, args.threshold, args.model_choice, args.dropout, args.msg_max_sz)

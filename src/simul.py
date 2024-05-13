@@ -16,7 +16,9 @@ def init_arguments():
                         help='Run localhost only (optional)')
     parser.add_argument('--port', type=port_number_validator, default=8080,
                         help='Port number (default is 8080)')
-    
+    parser.add_argument('--msg_max_sz', type=int, default=2 * 1000 * 1000 * 1000,
+                    help='Maximum gRPC message size in bytes (default is 2147483648 ~ 2GB)')
+
     model_group = parser.add_argument_group('Model Configuration')
     model_group.add_argument('--num_classes', type=int, default=20,
                              help='Number of output classes. 20 for PascalVOC multilabel, [10, 100] for Cifar multiclass')
@@ -92,7 +94,7 @@ if __name__ == '__main__':
                 i, serv_addr, args.ds, args.data_path, args.num_partitions, args.batch_size, args.gpu,
                 args.mode, args.server_rounds, args.straggler_prob, args.proximal_mu,
                 args.cifar_ver, args.cifar_val_split, args.num_classes, args.threshold,
-                args.model_choice, args.dropout)
+                args.model_choice, args.dropout, args.msg_max_sz)
             
             exit(0)
 

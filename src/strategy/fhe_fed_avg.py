@@ -16,6 +16,8 @@ from flwr.common import (
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.client_manager import ClientManager
 
+import pickle
+
 WARNING_MIN_AVAILABLE_CLIENTS_TOO_LOW = """
 Setting `min_available_clients` lower than `min_fit_clients` or
 `min_evaluate_clients` can cause the server to fail when there are too few clients
@@ -116,13 +118,15 @@ class FheFedAvg(fl.server.strategy.FedAvg):
                      [v.dtype for k, v in self.model.state_dict().items()])
 
         return [FheCryptoAPI.decrypt_torch_tensor(
-                self.cc, self.seckey, param, dtype, shape).cpu().numpy() \
+                self.cc, self.seckey, pickle.loads(param), dtype, shape).cpu().numpy() \
                 for param, shape, dtype in params]
 
     def __encrypt_params(self, ndarrays: NDArrays) -> Parameters:
         log(INFO, "FHE encrypt params")
 
-        enc_tensors = [FheCryptoAPI.encrypt_numpy_array(self.cc, self.pubkey, arr) for arr in ndarrays]
+        enc_tensors = [
+            pickle.dumps(FheCryptoAPI.encrypt_numpy_array(self.cc, self.pubkey, arr))
+            for arr in ndarrays]
         return Parameters(tensors=enc_tensors, tensor_type="")
     
     def __secure_aggregate(self, weights_results: List[Tuple[Parameters, int]]) -> Parameters:

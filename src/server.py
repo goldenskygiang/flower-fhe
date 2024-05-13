@@ -14,6 +14,8 @@ def init_arguments():
                         help='Run localhost only (optional)')
     parser.add_argument('--port', type=port_number_validator, default=8080,
                         help='Port number (default is 8080)')
+    parser.add_argument('--msg_max_sz', type=int, default=2 * 1000 * 1000 * 1000,
+                    help='Maximum gRPC message size in bytes (default is 2147483648 ~ 2GB)')
     
     model_group = parser.add_argument_group('Model Configuration')
     model_group.add_argument('--num_classes', type=int, default=20,
@@ -119,7 +121,8 @@ def run_server(args):
     hist = fl.server.start_server(
         server_address=server_addr,
         config=fl.server.ServerConfig(num_rounds=args.server_rounds),
-        strategy=strategy
+        strategy=strategy,
+        grpc_max_message_length=args.msg_max_sz
     )
 
     print(f"{hist}")

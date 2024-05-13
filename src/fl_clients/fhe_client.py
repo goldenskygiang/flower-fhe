@@ -21,6 +21,8 @@ from flwr.common import (
 from crypto.fhe_crypto import FheCryptoAPI
 from models import train, test
 
+import pickle
+
 class FheClient(fl.client.Client):
     def __init__(
             self, cid, dl_train, dl_val, init_model_fn: Callable, device=None,
@@ -48,9 +50,9 @@ class FheClient(fl.client.Client):
         cc = ins.config['crypto_context']
         pubkey = ins.config['public_key']
         
-        enc_params = [FheCryptoAPI.encrypt_numpy_array(
-            cc, pubkey, val.cpu().numpy()) \
-                      for _, val in self.model.state_dict().items()]
+        enc_params = [
+            pickle.dumps(FheCryptoAPI.encrypt_numpy_array(cc, pubkey, val.cpu().numpy())) \
+            for _, val in self.model.state_dict().items()]
         return GetParametersRes(
             status=Status(code=Code.OK, message="Success"),
             parameters=Parameters(tensors=enc_params, tensor_type="")
@@ -73,7 +75,7 @@ class FheClient(fl.client.Client):
                           [v.dtype for k, v in self.model.state_dict().items()])
 
         state_dict = OrderedDict({
-            k: FheCryptoAPI.decrypt_torch_tensor(cc, seckey, tensor, dtype, shape) \
+            k: FheCryptoAPI.decrypt_torch_tensor(cc, seckey, pickle.loads(tensor), dtype, shape) \
             for k, tensor, shape, dtype in params_dict
         })
         # replace params
