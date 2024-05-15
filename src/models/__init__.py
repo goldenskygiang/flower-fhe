@@ -95,7 +95,7 @@ def get_model(ds: str='pascal', num_classes: int=20, threshold: float=0.5, model
         model = torchvision.models.mobilenet_v2(weights='IMAGENET1K_V1')
         in_features = model.classifier[1].in_features
 
-    else: # only resnet atm
+    elif model_choice == 'resnet':
         model = torchvision.models.resnet18(weights='IMAGENET1K_V1')
         # model.avgpool = torch.nn.AdaptiveAvgPool2d(1)
         # model.fc = nn.Sequential(nn.Dropout(0.2),
@@ -103,6 +103,14 @@ def get_model(ds: str='pascal', num_classes: int=20, threshold: float=0.5, model
         #                         nn.ReLU(),
         #                         nn.Linear(64, num_classes))
         in_features = model.fc.in_features
+
+    elif model_choice == 'mnasnet':
+        model = torchvision.models.mnasnet0_75(weights='IMAGENET1K_V1')
+        # https://pytorch.org/vision/stable/models/generated/torchvision.models.mnasnet0_75.html#torchvision.models.MNASNet0_75_Weights
+        in_features = model.classifier[1].in_features
+
+    else:
+        raise ValueError('Model type not supported.')
 
     ## Freeze all pretrained layers
     for p in model.parameters():
@@ -117,7 +125,7 @@ def get_model(ds: str='pascal', num_classes: int=20, threshold: float=0.5, model
     )
 
     ## Replaces classification head
-    if model_choice == 'mobilenet':
+    if model_choice == 'mobilenet' or model_choice == 'mnasnet':
         model.classifier = classifier
     else: # resnet atm
         model.fc = classifier
