@@ -2,6 +2,8 @@ from collections import OrderedDict
 from logging import INFO, WARNING
 
 import random as rd
+from typing import Callable, List
+from numpy import ndarray
 import torch
 import flwr as fl
 from flwr.common.logger import log
@@ -17,17 +19,19 @@ from flwr.common import (
     Code)
 
 from crypto.rsa_crypto import RsaCryptoAPI
-from models import get_model, train, test
+from models import train, test
 
 class SymClient(fl.client.Client):
-    def __init__(self, cid, dl_train, dl_val, device=None, straggler_prob: float=0, proximal_mu: float=0) -> None:
+    def __init__(
+            self, cid, dl_train, dl_val, init_model_fn: Callable, device=None,
+            straggler_sched: list[int]=[], proximal_mu: float=0) -> None:
         super().__init__()
         self.cid = cid
         self.dl_train = dl_train
         self.dl_val = dl_val
         self.device = device
-        self.model = get_model()
-        self.straggler_prob = straggler_prob
+        self.model = init_model_fn()
+        self.straggler_sched = straggler_sched
         self.proximal_mu = proximal_mu
 
         if device:
@@ -69,13 +73,18 @@ class SymClient(fl.client.Client):
         trained) are comminucated back to the server)
         '''
 
+        log(INFO, f"Start training round {ins.config['curr_round']}")
+
         # copy params from server
         aes_key = RsaCryptoAPI.decrypt_aes_key(ins.config['private_key_pem'], ins.config['enc_key'])
         self.set_parameters(ins.parameters, aes_key)
 
-        is_straggler = rd.choices([True, False], weights=[self.straggler_prob, 1 - self.straggler_prob], k=1)[0]
+        is_straggler = 0
+        if ins.config['curr_round'] > 0 and len(self.straggler_sched) > 0:
+            sv_round = (int(ins.config['curr_round']) - 1) % len(self.straggler_sched)
+            is_straggler = self.straggler_sched[sv_round]
 
-        if not is_straggler:
+        if is_straggler == 0:
             log(INFO, f'Client {self.cid} training')
 
             # define optimizer
@@ -86,9 +95,10 @@ class SymClient(fl.client.Client):
             ])
 
             # local training
-            train(self.model, self.dl_train, optim, epochs=1, device=self.device, proximal_mu=self.proximal_mu)
+            train(ins.config['ds'], self.model, self.dl_train, optim, epochs=1,
+                  device=self.device, proximal_mu=self.proximal_mu)
         else:
-            log(WARNING, f'Client {self.cid} is a straggler in this round')
+            log(WARNING, f"Client {self.cid} is a straggler in round {ins.config['curr_round']}")
 
         # return model's params to the server, as well as extra info (number of training samples)
         get_param_ins = GetParametersIns(config={
@@ -112,7 +122,7 @@ class SymClient(fl.client.Client):
         aes_key = RsaCryptoAPI.decrypt_aes_key(ins.config['private_key_pem'], ins.config['enc_key'])
         self.set_parameters(ins.parameters, aes_key)
 
-        loss, accuracy = test(self.model, self.dl_val, device=self.device)
+        loss, accuracy = test(ins.config['ds'], self.model, self.dl_val, device=self.device)
 
         # send back to server
         return EvaluateRes(

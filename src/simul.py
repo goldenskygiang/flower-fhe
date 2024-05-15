@@ -1,90 +1,104 @@
-from logging import WARNING, log
 import os
-import sys
-from typing import List, Optional
-import flwr as fl
-import torch
+import argparse
+import time
 
-# https://docs.python-guide.org/writing/structure/
-# originally to be put outside src folder for other modules to call but ray fails
-# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
+from utils.args_validator import fraction_validator, port_number_validator
 
-from client import generate_client_fn
-from dataset import prep_data_decentralized
-from models.eval import get_evaluation_fn
-from strategy.fhe_fed_avg import FheFedAvg
-from strategy.sym_fed_avg import SymFedAvg
+def init_arguments():
+    parser = argparse.ArgumentParser(
+        description="Run Federated Learning server with model encryption mechanisms")
 
-def run_simulation(
-        data_path: str,
-        mode: str = 'sym',
-        batch_sz: int = 128,
-        num_clients: int = 1,
-        client_stragglers_prob: Optional[float | List[float]] = 0,
-        client_proximal_mu: Optional[float | List[float]] = 0,
-        serv_fraction_fit: float = 0.2,
-        serv_fraction_eval: float = 0.2,
-        serv_min_clients_avai: int = 1,
-        serv_min_clients_fit: int = 1,
-        serv_min_clients_eval: int = 1,
-        serv_rounds: int = 3,
-        gpu: bool = False,
-        dashboard: bool = True
-    ):
+    parser.add_argument('--mode', choices=['fhe', 'sym'], required=True,
+                        help='Choose either Fully Homomorphic Encryption (fhe) or Symmetric Encryption (sym) mode')
+    parser.add_argument('--gpu', action='store_true',
+                        help='Enable GPU for global evaluation (optional)')
+    parser.add_argument('--localhost', action='store_true',
+                        help='Run localhost only (optional)')
+    parser.add_argument('--port', type=port_number_validator, default=8080,
+                        help='Port number (default is 8080)')
+    
+    model_group = parser.add_argument_group('Model Configuration')
+    model_group.add_argument('--num_classes', type=int, default=20,
+                             help='Number of output classes. 20 for PascalVOC multilabel, [10, 100] for Cifar multiclass')
+    model_group.add_argument('--threshold', type=float, default=0.5,
+                             help='Prediction threshold for Binary Classification (or multi-label)')
+    model_group.add_argument('--model_choice', choices=['mobilenet', 'resnet'], default='mobilenet',
+                             help="The backbone CNN model. Either 'mobilenet' or 'resnet' atm")
+    model_group.add_argument('--dropout', type=float, default=0.4,
+                             help="Dropout probability for the classification head's dropout layer")
 
-    dl_train, dl_val, dl_test = prep_data_decentralized(
-        data_path=data_path, num_partitions=num_clients, batch_size=batch_sz)
+    data_group = parser.add_argument_group('Data Configuration')
+    data_group.add_argument('--ds', choices=['pascal', 'cifar'], required=True,
+                            help='Dataset name (pascal or cifar)')
+    data_group.add_argument('--data_path', type=str, required=True,
+                            help='Path to data folder')
+    data_group.add_argument('--num_partitions', type=int, required=True,
+                            help='Number of data partitions and clients')
+    data_group.add_argument('--batch_size', type=int, default=32, 
+                            help='Data batch size (default is 32)')
+    data_group.add_argument('--cifar_ver', type=str, default='10',
+                            help='CIFAR dataset version (optional, default is 10)')
+    data_group.add_argument('--cifar_val_split', type=float, default=0.15,
+                            help='CIFAR dataset validation split size (default is 0.15)')
+    
+    fl_group = parser.add_argument_group('Federated Learning Configuration')
+    fl_group.add_argument('--server_rounds', type=int, default=5, 
+                          help='Number of server rounds (default is 5)')
+    fl_group.add_argument('--fraction_fit', type=fraction_validator, default=0.2, 
+                          help='Fraction of fitting clients (default is 0.2, limit double value from 0 to 1)')
+    fl_group.add_argument('--fraction_evaluate', type=fraction_validator, default=0.2, 
+                          help='Fraction of evaluating clients (default is 0.2, limit double value from 0 to 1)')
+    fl_group.add_argument('--min_available_clients', type=int, default=2, 
+                          help='Minimum number of available clients to run federated learning (default is 2)')
+    fl_group.add_argument('--min_evaluate_clients', type=int, default=2, 
+                          help='Minimum number of evaluating clients (default is 2)')
+    fl_group.add_argument('--min_fit_clients', type=int, default=2, 
+                          help='Minimum number of fitting clients (default is 2)')
+    
+    fedprox_group = parser.add_argument_group('FedProx Configuration')
+    fedprox_group.add_argument('--straggler_prob', type=fraction_validator, default=0,
+                               help='Probability of being a Straggler node (default is 0, limit double value from 0 to 1)')
+    fedprox_group.add_argument('--proximal_mu', type=float, default=0,
+                               help='Proximal mu value (default is 0)')
 
-    if gpu:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
-        if not(torch.cuda.is_available()):
-            log(WARNING, 'CUDA device is not available. Switching to CPU.')
-    else:
-        device = torch.device('cpu')
-
-    fhe = (mode == 'fhe')
-    if fhe:
-        strategy = FheFedAvg(
-            fraction_fit=serv_fraction_fit,
-            fraction_evaluate=serv_fraction_eval,
-            min_available_clients=serv_min_clients_avai,
-            min_evaluate_clients=serv_min_clients_eval,
-            min_fit_clients=serv_min_clients_fit,
-            evaluate_fn=get_evaluation_fn(dl_test, device)
-        )
-    else:
-        strategy = SymFedAvg(
-            fraction_fit=serv_fraction_fit,
-            fraction_evaluate=serv_fraction_eval,
-            min_available_clients=serv_min_clients_avai,
-            min_evaluate_clients=serv_min_clients_eval,
-            min_fit_clients=serv_min_clients_fit,
-            evaluate_fn=get_evaluation_fn(dl_test, device)
-        )
-
-    gen_client_fn = generate_client_fn(
-        dl_trains=dl_train,
-        dl_vals=dl_val,
-        fhe=(mode == 'fhe'),
-        device=device,
-        straggler_prob=client_stragglers_prob,
-        proximal_mu=client_proximal_mu
-    )
-
-    hist = fl.simulation.start_simulation(
-        client_fn=gen_client_fn,
-        num_clients=num_clients,
-        config=fl.server.ServerConfig(num_rounds=serv_rounds),
-        strategy=strategy,
-        ray_init_args={
-            "include_dashboard": dashboard,
-            "dashboard_host": "0.0.0.0"
-        }
-    )
-
-    return hist
+    return parser.parse_args()
 
 if __name__ == '__main__':
-    hist = run_simulation('data')
-    print(hist)
+    args = init_arguments()
+
+    processes = []
+
+    sv_pid = os.fork()
+    if (sv_pid == 0):
+        # run server here
+        from server import run_server
+        run_server(args)
+        exit(0)
+    
+    processes.append(sv_pid)
+
+    time.sleep(10)
+
+    clients = args.num_partitions
+    for i in range(clients):
+        pid = os.fork()
+
+        if (pid == 0):
+            # call client process
+            from client import run_client
+            serv_addr = f"127.0.0.1:{args.port}" if args.localhost else f"0.0.0.0:{args.port}"
+
+            run_client(
+                i, serv_addr, args.ds, args.data_path, args.num_partitions, args.batch_size, args.gpu,
+                args.mode, args.server_rounds, args.straggler_prob, args.proximal_mu,
+                args.cifar_ver, args.cifar_val_split, args.num_classes, args.threshold,
+                args.model_choice, args.dropout)
+            
+            exit(0)
+
+        processes.append(pid)
+
+    for pid in processes:
+        os.waitpid(pid, 0)
+
+    print("*" * 20 + " SIMULATION COMPLETED " + "*" * 20)

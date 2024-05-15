@@ -1,5 +1,7 @@
 src/data
 reference.ipynb
+.vscode
+exp_*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

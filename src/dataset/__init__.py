@@ -122,7 +122,7 @@ def prep_data_cifar(data_path, ver: str='10', val_split=0.15):
     return ds_train, ds_val, ds_test
 
 
-def prep_data(data_path):
+def prep_data_pascal(data_path):
     # Transform
     mean = [.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
@@ -146,8 +146,9 @@ def prep_data(data_path):
     return ds_train, ds_valid, ds_test
 
 
-def prep_data_decentralized(data_path, num_partitions: int,
-                 batch_size: int=128, num_workers: int=2):
+def prep_data_decentralized(
+        ds_name: str, data_path: str, num_partitions: int,
+        batch_size: int=128, num_workers: int=2, **kwargs):
     '''
     Partitions the training / validation set into N disjoint subsets,
     each of which will become the local dataset of the
@@ -155,7 +156,12 @@ def prep_data_decentralized(data_path, num_partitions: int,
     global model evaluation.
     '''
     # get train, test
-    ds_train, ds_val, ds_test = prep_data(data_path)
+    if ds_name == 'pascal':
+        ds_train, ds_val, ds_test = prep_data_pascal(data_path)
+    else:
+        cifar_ver = kwargs['cifar_ver'] if 'cifar_ver' in kwargs.keys() else '10'
+        val_split = kwargs['cifar_val_split'] if 'cifar_val_split' in kwargs.keys() else 0.15
+        ds_train, ds_val, ds_test = prep_data_cifar(data_path, cifar_ver, val_split)
 
     # split trainset, valset into n partitions
     num_images_train = len(ds_train) // num_partitions

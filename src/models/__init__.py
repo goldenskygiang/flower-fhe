@@ -138,6 +138,10 @@ def get_model(ds: str='pascal', num_classes: int=20, threshold: float=0.5, model
 
     return model
 
+def generate_model_fn(**kwargs):
+    def model_fn():
+        return get_model(**kwargs)
+    return model_fn
 
 # Standard Train / Test loop for MultiLabel Task
 def train(ds, model, dl_train, optimizer, epochs, device=None, proximal_mu: float=0):

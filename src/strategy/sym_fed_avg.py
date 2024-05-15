@@ -1,5 +1,4 @@
 from crypto.rsa_crypto import RsaCryptoAPI
-from models import get_model
 
 from typing import Callable, Dict, List, Optional, Tuple, Union
 import torch
@@ -29,6 +28,7 @@ than or equal to the values of `min_fit_clients` and `min_evaluate_clients`.
 class SymFedAvg(fl.server.strategy.FedAvg):
     def __init__(
         self,
+        init_model_fn: Callable,
         *,
         fraction_fit: float = 1.0,
         fraction_evaluate: float = 1.0,
@@ -47,6 +47,7 @@ class SymFedAvg(fl.server.strategy.FedAvg):
         initial_parameters: Optional[Parameters] = None,
         fit_metrics_aggregation_fn: Optional[MetricsAggregationFn] = None,
         evaluate_metrics_aggregation_fn: Optional[MetricsAggregationFn] = None,
+        dataset_name: str = None
     ) -> None:
         """FedAvg strategy with symmmetric encryption
 
@@ -80,8 +81,9 @@ class SymFedAvg(fl.server.strategy.FedAvg):
         ):
             log(WARNING, WARNING_MIN_AVAILABLE_CLIENTS_TOO_LOW)
 
-        self.model = get_model()
+        self.model = init_model_fn()
         self.init_stage = True
+        self.dataset_name = dataset_name
 
         self.__aes_key = RsaCryptoAPI.gen_aes_key()
 
@@ -146,6 +148,8 @@ class SymFedAvg(fl.server.strategy.FedAvg):
             fit_ins.config['enc_key'] = RsaCryptoAPI.encrypt_aes_key(
                 self.__aes_key, public_key_pem)
             fit_ins.config['private_key_pem'] = private_key_pem
+            fit_ins.config['curr_round'] = server_round
+            fit_ins.config['ds'] = self.dataset_name
 
         return fit_config
 
@@ -163,6 +167,7 @@ class SymFedAvg(fl.server.strategy.FedAvg):
             ins.config['enc_key'] = RsaCryptoAPI.encrypt_aes_key(
                 self.__aes_key, public_key_pem)
             ins.config['private_key_pem'] = private_key_pem
+            ins.config['ds'] = self.dataset_name
 
         return eval_config
 

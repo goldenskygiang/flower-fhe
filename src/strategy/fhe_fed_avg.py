@@ -1,8 +1,7 @@
 from crypto.fhe_crypto import FheCryptoAPI
-from models import get_model
 
 from typing import Callable, Dict, List, Optional, Tuple, Union
-from logging import WARNING
+from logging import INFO, WARNING
 
 import flwr as fl
 from flwr.common.logger import log
@@ -27,6 +26,7 @@ than or equal to the values of `min_fit_clients` and `min_evaluate_clients`.
 class FheFedAvg(fl.server.strategy.FedAvg):
     def __init__(
         self,
+        init_model_fn: Callable,
         *,
         fraction_fit: float = 1.0,
         fraction_evaluate: float = 1.0,
@@ -45,6 +45,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
         initial_parameters: Optional[Parameters] = None,
         fit_metrics_aggregation_fn: Optional[MetricsAggregationFn] = None,
         evaluate_metrics_aggregation_fn: Optional[MetricsAggregationFn] = None,
+        dataset_name: str = None
     ) -> None:
         """FedAvg strategy integrated with Fully Homomorphic Encryption.
 
@@ -78,8 +79,9 @@ class FheFedAvg(fl.server.strategy.FedAvg):
         ):
             log(WARNING, WARNING_MIN_AVAILABLE_CLIENTS_TOO_LOW)
 
-        self.model = get_model()
+        self.model = init_model_fn()
         self.init_stage = True
+        self.dataset_name = dataset_name
 
         self.cc, self.pubkey, self.seckey = FheCryptoAPI.create_crypto_context_and_keys()
 
@@ -110,7 +112,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
                      [v.dtype for k, v in self.model.state_dict().items()])
 
         return [FheCryptoAPI.decrypt_torch_tensor(
-                self.cc, self.seckey, param, dtype, shape, dtype=dtype).cpu().numpy() \
+                self.cc, self.seckey, param, dtype, shape).cpu().numpy() \
                 for param, shape, dtype in params]
 
     def __encrypt_params(self, ndarrays: NDArrays) -> Parameters:
@@ -140,6 +142,8 @@ class FheFedAvg(fl.server.strategy.FedAvg):
             ins.config['crypto_context'] = self.cc
             ins.config['public_key'] = self.pubkey
             ins.config['secret_key'] = self.seckey
+            ins.config['curr_round'] = server_round
+            ins.config['ds'] = self.dataset_name
 
         return fit_config
 
@@ -156,6 +160,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
             ins.config['crypto_context'] = self.cc
             ins.config['public_key'] = self.pubkey
             ins.config['secret_key'] = self.seckey
+            ins.config['ds'] = self.dataset_name
 
         return eval_config
 

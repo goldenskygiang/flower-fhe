@@ -1,0 +1,40 @@
+// FHE - Pascal - FedAvg
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 2 --min_available_clients 1 --min_evaluate_clients 1 --min_fit_clients 1
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 4
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 8
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 16
+
+// SYM - Pascal - FedAvg
+
+python simul.py --mode sym --localhost --ds pascal --data_path ./data/pascal --num_partitions 2 --min_available_clients 1 --min_evaluate_clients 1 --min_fit_clients 1
+
+python simul.py --mode sym --localhost --ds pascal --data_path ./data/pascal --num_partitions 4
+
+python simul.py --mode sym --localhost --ds pascal --data_path ./data/pascal --num_partitions 8
+
+python simul.py --mode sym --localhost --ds pascal --data_path ./data/pascal --num_partitions 16
+
+// FHE - CIFAR - FedAvg
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 2  --min_available_clients 1 --min_evaluate_clients 1 --min_fit_clients 1
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 4 
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 8 
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 16 
+
+// SYM - CIFAR - FedAvg
+
+python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 2  --min_available_clients 1 --min_evaluate_clients 1 --min_fit_clients 1
+
+python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 4 
+
+python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 8 
+
+python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 16 
+

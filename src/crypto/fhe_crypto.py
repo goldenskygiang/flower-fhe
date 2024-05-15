@@ -46,13 +46,13 @@ class FheCryptoAPI:
         return cc_bytes, pubkey_bytes, seckey_bytes
     
     @staticmethod
-    def __deserialize_bin_file(bytedata: bytes, deserialize_fn, ser_type=BINARY):
+    def __deserialize_bin_file(bytedata: bytes, deserialize_fn):
         filename = f"{uuid.uuid4()}"
 
         with open(filename, "wb") as f:
             f.write(bytedata)
 
-        obj, res = deserialize_fn(filename, ser_type)
+        obj, res = deserialize_fn(filename, BINARY)
 
         if not res:
             raise Exception("Unable to deserialize object")
@@ -61,10 +61,10 @@ class FheCryptoAPI:
         return obj
     
     @staticmethod
-    def serialize_to_bytes(obj, ser_type=BINARY):
+    def serialize_to_bytes(obj):
         filename = f"{uuid.uuid4()}"
 
-        SerializeToFile(filename, obj, ser_type)
+        SerializeToFile(filename, obj, BINARY)
 
         with open(filename, "rb") as f:
             bytedata = f.read()
