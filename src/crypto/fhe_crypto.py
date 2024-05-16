@@ -165,7 +165,8 @@ class FheCryptoAPI:
                 if i >= len(aggregated):
                     aggregated.append(normalized)
                 else:
-                    aggregated[i] = cc.EvalAdd(aggregated[i], normalized)
+                    for j in range(len(aggregated[i])):
+                        aggregated[i][j] = cc.EvalAdd(aggregated[i][j], normalized[j])
 
         output = []
         for layer in aggregated:
