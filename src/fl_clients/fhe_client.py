@@ -21,10 +21,14 @@ from flwr.common import (
 from crypto.fhe_crypto import FheCryptoAPI
 from models import train, test
 
+import pickle
+
 class FheClient(fl.client.Client):
     def __init__(
             self, cid, dl_train, dl_val, init_model_fn: Callable, device=None,
             straggler_sched: list[int]=[], proximal_mu: float=0) -> None:
+        log(INFO, f"FHE client {cid} created")
+
         super().__init__()
         self.cid = cid
         self.dl_train = dl_train
@@ -42,12 +46,13 @@ class FheClient(fl.client.Client):
         Extract all model's params and convert to a list of
         NumPy arrays, then encrypt. Server doesn't work with PyTorch, TF...
         '''
+        log(INFO, "Client GETting params")
         cc = ins.config['crypto_context']
         pubkey = ins.config['public_key']
         
-        enc_params = [FheCryptoAPI.encrypt_numpy_array(
-            cc, pubkey, val.cpu().numpy()) \
-                      for _, val in self.model.state_dict().items()]
+        enc_params = [
+            pickle.dumps(FheCryptoAPI.encrypt_numpy_array(cc, pubkey, val.cpu().numpy())) \
+            for _, val in self.model.state_dict().items()]
         return GetParametersRes(
             status=Status(code=Code.OK, message="Success"),
             parameters=Parameters(tensors=enc_params, tensor_type="")
@@ -58,6 +63,8 @@ class FheClient(fl.client.Client):
         With the model's params received from central server,
         decrypt them and overwrite the unintialized model in this class
         '''
+        log(INFO, "Client setting params")
+
         cc = config['crypto_context']
         seckey = config['secret_key']
 
@@ -68,7 +75,7 @@ class FheClient(fl.client.Client):
                           [v.dtype for k, v in self.model.state_dict().items()])
 
         state_dict = OrderedDict({
-            k: FheCryptoAPI.decrypt_torch_tensor(cc, seckey, tensor, dtype, shape) \
+            k: FheCryptoAPI.decrypt_torch_tensor(cc, seckey, pickle.loads(tensor), dtype, shape) \
             for k, tensor, shape, dtype in params_dict
         })
         # replace params
@@ -80,6 +87,7 @@ class FheClient(fl.client.Client):
         this client's dataset. At the end, the params (locally
         trained) are comminucated back to the server)
         '''
+        log(INFO, "FITTING")
         log(INFO, f"Start training round {ins.config['curr_round']}")
 
         # copy params from server

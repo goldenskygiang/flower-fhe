@@ -148,7 +148,7 @@ def prep_data_pascal(data_path):
 
 def prep_data_decentralized(
         ds_name: str, data_path: str, num_partitions: int,
-        batch_size: int=128, num_workers: int=2, **kwargs):
+        batch_size: int=128, num_workers: int=0, **kwargs):
     '''
     Partitions the training / validation set into N disjoint subsets,
     each of which will become the local dataset of the

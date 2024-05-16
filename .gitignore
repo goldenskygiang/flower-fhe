@@ -1,5 +1,6 @@
 src/data
 reference.ipynb
+src/results
 .vscode
 exp_*.csv
 

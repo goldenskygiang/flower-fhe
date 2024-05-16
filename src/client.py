@@ -27,7 +27,9 @@ def init_arguments():
                         help='Port number (default is 8080)')
     parser.add_argument('--num_rounds', type=int, default=5,
                         help='Number of server rounds (default is 5)')
-    
+    parser.add_argument('--msg_max_sz', type=int, default=2 * 1000 * 1000 * 1000,
+                    help='Maximum gRPC message size in bytes (default is 2147483648 ~ 2GB)')
+
     model_group = parser.add_argument_group('Model Configuration')
     model_group.add_argument('--num_classes', type=int, default=20,
                              help='Number of output classes. 20 for PascalVOC multilabel, [10, 100] for Cifar multiclass')
@@ -92,6 +94,7 @@ def generate_client_fn(dl_train, dl_val, fhe: bool, init_model_fn: Callable,
         cid = int(cid)
 
         if fhe:
+            log(INFO, "FHE client creating")
             return FheClient(
                 cid=cid,
                 dl_train=dl_train,
@@ -143,7 +146,7 @@ def measure_current_process_stats(metrics_data: list, localhost: bool):
             "NetRecv": net_usage_recv
         })
 
-        log(INFO, f"Mem={memory_usage}, NetSent={net_usage_sent}, NetRecv={net_usage_recv}")
+        # log(INFO, f"Mem={memory_usage}, NetSent={net_usage_sent}, NetRecv={net_usage_recv}")
         old_net_info = net_info
 
         time.sleep(1)
@@ -165,7 +168,8 @@ def run_client(
         num_classes: int=20,
         threshold: float=0.5,
         model_choice: str='mobilenet',
-        dropout: float=0.4):
+        dropout: float=0.4,
+        msg_max_sz: int=2000000000):
     
     import torch
     import flwr as fl
@@ -214,7 +218,8 @@ def run_client(
 
     fl.client.app.start_client(
         server_address=server_addr,
-        client_fn=client_fn
+        client_fn=client_fn,
+        grpc_max_message_length=msg_max_sz
     )
 
     stop_event.set()
@@ -233,4 +238,4 @@ if __name__ == '__main__':
         args.cid, server_addr, args.ds, args.data_path, args.num_partitions, args.batch_size, args.gpu,
         args.mode, args.num_rounds, args.straggler_prob, args.proximal_mu,
         args.cifar_ver, args.cifar_val_split,
-        args.num_classes, args.threshold, args.model_choice, args.dropout)
+        args.num_classes, args.threshold, args.model_choice, args.dropout, args.msg_max_sz)
