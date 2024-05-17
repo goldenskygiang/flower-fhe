@@ -117,17 +117,23 @@ class SymClient(fl.client.Client):
         Evaluate the model sent by server on the local client's
         local validation set. Returns performance metrics
         '''
-        log(INFO, f'Client {self.cid} evaluating')
+        if ins.config['skip']:
+            log(WARNING, f'Client {self.cid} skip evaluation this round')
+            loss = 0.0
+            accuracy = 0.0
+        else:
+            log(INFO, f'Client {self.cid} evaluating')
 
-        aes_key = RsaCryptoAPI.decrypt_aes_key(ins.config['private_key_pem'], ins.config['enc_key'])
-        self.set_parameters(ins.parameters, aes_key)
+            aes_key = RsaCryptoAPI.decrypt_aes_key(ins.config['private_key_pem'], ins.config['enc_key'])
+            self.set_parameters(ins.parameters, aes_key)
 
-        loss, accuracy = test(ins.config['ds'], self.model, self.dl_val, device=self.device)
+            loss, accuracy = test(ins.config['ds'], self.model, self.dl_val, device=self.device)
+            loss = float(loss)
 
         # send back to server
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
-            loss=float(loss),
+            loss=loss,
             num_examples=len(self.dl_val),
             metrics={'accuracy': accuracy}
         )
