@@ -1,3 +1,4 @@
+import time
 from crypto.fhe_crypto import FheCryptoAPI
 
 from typing import Callable, Dict, List, Optional, Tuple, Union
@@ -86,6 +87,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
         self.dataset_name = dataset_name
 
         self.cc, self.pubkey, self.seckey = FheCryptoAPI.create_crypto_context_and_keys()
+        self.ckpt_name = ""
 
         super().__init__(
             fraction_fit=fraction_fit,
@@ -129,6 +131,16 @@ class FheFedAvg(fl.server.strategy.FedAvg):
             for arr in ndarrays]
         return Parameters(tensors=enc_tensors, tensor_type="")
     
+    def _save_checkpoint(self, params):
+        self.ckpt_name = f"ckpt_fhe_{int(time.time())}.bin"
+        with open(self.ckpt_name, 'wb') as f:
+            pickle.dump(params, f)
+
+    def _load_previous_checkpoint(self):
+        with open(self.ckpt_name, 'rb') as f:
+            params = pickle.load(f)
+        return params
+    
     def __secure_aggregate(self, weights_results: List[Tuple[Parameters, int]]) -> Parameters:
         log(INFO, "FHE secure aggregate")
 
@@ -148,7 +160,11 @@ class FheFedAvg(fl.server.strategy.FedAvg):
         if self.init_stage:
             # encrypt all params
             parameters = self.__encrypt_params(parameters.tensors)
+            self._save_checkpoint(parameters)
             self.init_stage = False
+
+        if len(parameters.tensors) == 0:
+            parameters = self._load_previous_checkpoint()
 
         fit_config = super().configure_fit(server_round, parameters, client_manager)
 
@@ -158,6 +174,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
             ins.config['secret_key'] = self.seckey
             ins.config['curr_round'] = server_round
             ins.config['ds'] = self.dataset_name
+            ins.config['skip'] = (len(parameters.tensors) == 0)
 
         log(INFO, "FHE configure fit DONE")
 
@@ -179,6 +196,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
             ins.config['public_key'] = self.pubkey
             ins.config['secret_key'] = self.seckey
             ins.config['ds'] = self.dataset_name
+            ins.config['skip'] = (len(parameters.tensors) == 0)
 
         return eval_config
 
@@ -243,5 +261,7 @@ class FheFedAvg(fl.server.strategy.FedAvg):
             log(WARNING, "No fit_metrics_aggregation_fn provided")
 
         # TODO: Save new checkpoint here
+        if len(parameters_aggregated.tensors) > 0:
+            self._save_checkpoint(parameters_aggregated)
 
         return parameters_aggregated, metrics_aggregated
