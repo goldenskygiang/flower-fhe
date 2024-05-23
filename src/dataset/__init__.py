@@ -181,13 +181,13 @@ def prep_data_decentralized(
 
     for trainset_ in trainsets:
         # num_total = len(trainset_)
-        dl_trains.append(DataLoader(trainset_, batch_size=batch_size, shuffle=True, num_workers=num_workers))
+        dl_trains.append(DataLoader(trainset_, batch_size=batch_size, shuffle=True, num_workers=num_workers, drop_last=True))
 
     for valset_ in valsets:
         num_total = len(valset_)
-        dl_vals.append(DataLoader(valset_, batch_size=batch_size, num_workers=num_workers))
+        dl_vals.append(DataLoader(valset_, batch_size=batch_size, num_workers=num_workers, drop_last=True))
 
     # test
-    dl_test = DataLoader(ds_test, batch_size=batch_size)
+    dl_test = DataLoader(ds_test, batch_size=batch_size, drop_last=True)
 
     return dl_trains, dl_vals, dl_test
