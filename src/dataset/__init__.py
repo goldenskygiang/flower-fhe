@@ -117,7 +117,7 @@ def prep_data_cifar(data_path, ver: str='10', val_split=0.15):
     train_size = total_size - val_size
     ds_train, ds_val = torch.utils.data.random_split(full_train, [train_size, val_size])
 
-    ds_test = CIFAR10(data_path, ver, train=False, transform=tf)
+    ds_test = CIFAR10(data_path, train=False, transform=tf)
 
     return ds_train, ds_val, ds_test
 

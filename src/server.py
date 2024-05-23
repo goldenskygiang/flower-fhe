@@ -22,7 +22,7 @@ def init_arguments():
                              help='Number of output classes. 20 for PascalVOC multilabel, [10, 100] for Cifar multiclass')
     model_group.add_argument('--threshold', type=float, default=0.5,
                              help='Prediction threshold for Binary Classification (or multi-label)')
-    model_group.add_argument('--model_choice', choices=['mobilenet', 'resnet'], default='mobilenet',
+    model_group.add_argument('--model_choice', choices=['mobilenet', 'resnet', 'mnasnet'], default='mobilenet',
                              help="The backbone CNN model. Either 'mobilenet' or 'resnet' atm")
     model_group.add_argument('--dropout', type=float, default=0.4,
                              help="Dropout probability for the classification head's dropout layer")

@@ -35,7 +35,7 @@ def init_arguments():
                              help='Number of output classes. 20 for PascalVOC multilabel, [10, 100] for Cifar multiclass')
     model_group.add_argument('--threshold', type=float, default=0.5,
                              help='Prediction threshold for Binary Classification (or multi-label)')
-    model_group.add_argument('--model_choice', choices=['mobilenet', 'resnet'], default='mobilenet',
+    model_group.add_argument('--model_choice', choices=['mobilenet', 'resnet', 'mnasnet'], default='mobilenet',
                              help="The backbone CNN model. Either 'mobilenet' or 'resnet' atm")
     model_group.add_argument('--dropout', type=float, default=0.4,
                              help="Dropout probability for the classification head's dropout layer")
@@ -77,7 +77,8 @@ def init_arguments():
 
     return args
 
-def generate_client_fn(dl_train, dl_val, fhe: bool, init_model_fn: Callable,
+def generate_client_fn(client_id: int, 
+                       dl_train, dl_val, fhe: bool, init_model_fn: Callable,
                        device=None,
                        num_rounds = 5,
                        straggler_prob: float = 0,
@@ -91,12 +92,10 @@ def generate_client_fn(dl_train, dl_val, fhe: bool, init_model_fn: Callable,
     log(INFO, f"Straggler schedule: {straggler_schedule}")
     
     def client_fn(cid: str):
-        cid = int(cid)
-
         if fhe:
             log(INFO, "FHE client creating")
             return FheClient(
-                cid=cid,
+                cid=client_id,
                 dl_train=dl_train,
                 dl_val=dl_val,
                 device=device,
@@ -106,7 +105,7 @@ def generate_client_fn(dl_train, dl_val, fhe: bool, init_model_fn: Callable,
             )
         else:
             return SymClient(
-                cid=cid,
+                cid=client_id,
                 dl_train=dl_train,
                 dl_val=dl_val,
                 device=device,
@@ -202,7 +201,7 @@ def run_client(
     )
     
     client_fn = generate_client_fn(
-        dl_train, dl_val, mode == 'fhe', init_model_fn,
+        cid, dl_train, dl_val, mode == 'fhe', init_model_fn,
         device, num_rounds, straggler_prob, proximal_mu)
 
     log(INFO, f"Client connecting to server at {server_addr}")

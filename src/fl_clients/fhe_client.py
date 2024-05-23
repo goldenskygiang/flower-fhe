@@ -90,15 +90,15 @@ class FheClient(fl.client.Client):
         log(INFO, "FITTING")
         log(INFO, f"Start training round {ins.config['curr_round']}")
 
-        # copy params from server
-        self.set_parameters(ins.parameters, ins.config)
-
         is_straggler = 0
         if ins.config['curr_round'] > 0 and len(self.straggler_sched) > 0:
             sv_round = (int(ins.config['curr_round']) - 1) % len(self.straggler_sched)
             is_straggler = self.straggler_sched[sv_round]
 
         if is_straggler == 0:
+            # copy params from server
+            self.set_parameters(ins.parameters, ins.config)
+
             log(INFO, f'Client {self.cid} training')
             # define optimizer
             #optim = torch.optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9)
@@ -110,22 +110,27 @@ class FheClient(fl.client.Client):
             # local training
             train(ins.config['ds'], self.model, self.dl_train, optim, epochs=1,
                   device=self.device, proximal_mu=self.proximal_mu)
+            
+            # return model's params to the server, as well as extra info (number of training samples)
+            get_param_ins = GetParametersIns(config={
+                'crypto_context': ins.config['crypto_context'],
+                'public_key': ins.config['public_key']
+            })
+
+            return FitRes(
+                status=Status(code=Code.OK, message="Success"),
+                parameters=self.get_parameters(get_param_ins).parameters,
+                num_examples=len(self.dl_train),
+                metrics={ "is_straggler": is_straggler }
+            )
         else:
             log(WARNING, f"Client {self.cid} is a straggler in round {ins.config['curr_round']}")
-
-        # return model's params to the server, as well as extra info (number of training samples)
-        get_param_ins = GetParametersIns(config={
-            'crypto_context': ins.config['crypto_context'],
-            'public_key': ins.config['public_key']
-        })
-
-        return FitRes(
-            status=Status(code=Code.OK, message="Success"),
-            parameters=self.get_parameters(get_param_ins).parameters,
-            num_examples=len(self.dl_train),
-            metrics={ "is_straggler": is_straggler }
-        )
-
+            return FitRes(
+                status=Status(code=Code.FIT_NOT_IMPLEMENTED, message="Straggler"),
+                parameters=Parameters([], ''),
+                num_examples=len(self.dl_train),
+                metrics={ "is_straggler": is_straggler }
+            )
     def evaluate(self, ins: EvaluateIns) -> EvaluateRes:
         '''
         Evaluate the model sent by server on the local client's
