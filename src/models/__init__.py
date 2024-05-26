@@ -192,7 +192,7 @@ def train(ds, model, dl_train, optimizer, epochs, device=None, proximal_mu: floa
         if ds == 'pascal':
             accuracy = np.sum(num_correct) / (len(dl_train) * 20) # 20: n_classes
         else:
-            accuracy = num_correct / len(dl_train)
+            accuracy = num_correct / len(dl_train.dataset)
 
         print(f"Epoch {epoch + 1}/{epochs}, Loss: {average_loss:.4f}, Acc: {accuracy:.4f}")
 
@@ -231,7 +231,7 @@ def test(ds, model, dl_test, device=None):
     if ds == 'pascal':
         accuracy = np.sum(num_correct) / (len(dl_test.dataset) * 20) # 20: n_classes
     else: # 'cifar'
-        accuracy = num_correct / len(dl_test)
+        accuracy = num_correct / len(dl_test.dataset)
     #accuracy = correct / len(dl_test.dataset)
     return loss, accuracy
 
