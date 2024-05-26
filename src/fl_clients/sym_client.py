@@ -24,7 +24,7 @@ from models import train, test
 class SymClient(fl.client.Client):
     def __init__(
             self, cid, dl_train, dl_val, init_model_fn: Callable, device=None,
-            straggler_sched: list[int]=[], proximal_mu: float=0) -> None:
+            straggler_sched: list[int]=[], proximal_mu: float=0, epochs: int=1) -> None:
         super().__init__()
         self.cid = cid
         self.dl_train = dl_train
@@ -33,6 +33,7 @@ class SymClient(fl.client.Client):
         self.model = init_model_fn()
         self.straggler_sched = straggler_sched
         self.proximal_mu = proximal_mu
+        self.epochs = epochs
 
         if device:
             self.model = self.model.to(device)
@@ -95,7 +96,7 @@ class SymClient(fl.client.Client):
             ])
 
             # local training
-            train(ins.config['ds'], self.model, self.dl_train, optim, epochs=1,
+            train(ins.config['ds'], self.model, self.dl_train, optim, epochs=self.epochs,
                   device=self.device, proximal_mu=self.proximal_mu)
         else:
             log(WARNING, f"Client {self.cid} is a straggler in round {ins.config['curr_round']}")

@@ -39,6 +39,8 @@ def init_arguments():
                              help="The backbone CNN model. Either 'mobilenet' or 'resnet' atm")
     model_group.add_argument('--dropout', type=float, default=0.4,
                              help="Dropout probability for the classification head's dropout layer")
+    model_group.add_argument('--epochs', type=int, default=1,
+                             help='Number of training epochs per round (default is 1)')
     
     data_group = parser.add_argument_group('Data Configuration')
     data_group.add_argument('--ds', choices=['pascal', 'cifar'], required=True,
@@ -82,7 +84,8 @@ def generate_client_fn(client_id: int,
                        device=None,
                        num_rounds = 5,
                        straggler_prob: float = 0,
-                       proximal_mu: float = 0):
+                       proximal_mu: float = 0,
+                       epochs: int=1):
     from fl_clients.fhe_client import FheClient
     from fl_clients.sym_client import SymClient
 
@@ -101,7 +104,8 @@ def generate_client_fn(client_id: int,
                 device=device,
                 straggler_sched=straggler_schedule,
                 proximal_mu=proximal_mu,
-                init_model_fn=init_model_fn
+                init_model_fn=init_model_fn,
+                epochs=epochs
             )
         else:
             return SymClient(
@@ -111,7 +115,8 @@ def generate_client_fn(client_id: int,
                 device=device,
                 straggler_sched=straggler_schedule,
                 proximal_mu=proximal_mu,
-                init_model_fn=init_model_fn
+                init_model_fn=init_model_fn,
+                epochs=epochs
             )
 
     return client_fn
@@ -168,7 +173,8 @@ def run_client(
         threshold: float=0.5,
         model_choice: str='mobilenet',
         dropout: float=0.4,
-        msg_max_sz: int=2000000000):
+        msg_max_sz: int=2000000000,
+        epochs: int=1):
     
     import torch
     import flwr as fl
@@ -202,7 +208,7 @@ def run_client(
     
     client_fn = generate_client_fn(
         cid, dl_train, dl_val, mode == 'fhe', init_model_fn,
-        device, num_rounds, straggler_prob, proximal_mu)
+        device, num_rounds, straggler_prob, proximal_mu, epochs)
 
     log(INFO, f"Client connecting to server at {server_addr}")
 
@@ -236,5 +242,5 @@ if __name__ == '__main__':
     run_client(
         args.cid, server_addr, args.ds, args.data_path, args.num_partitions, args.batch_size, args.gpu,
         args.mode, args.num_rounds, args.straggler_prob, args.proximal_mu,
-        args.cifar_ver, args.cifar_val_split,
-        args.num_classes, args.threshold, args.model_choice, args.dropout, args.msg_max_sz)
+        args.cifar_ver, args.cifar_val_split, args.num_classes, args.threshold,
+        args.model_choice, args.dropout, args.msg_max_sz, args.epochs)

@@ -28,6 +28,8 @@ def init_arguments():
                              help="The backbone CNN model. Either 'mobilenet' or 'resnet' atm")
     model_group.add_argument('--dropout', type=float, default=0.4,
                              help="Dropout probability for the classification head's dropout layer")
+    model_group.add_argument('--epochs', type=int, default=1,
+                             help='Number of training epochs per round (default is 1)')
 
     data_group = parser.add_argument_group('Data Configuration')
     data_group.add_argument('--ds', choices=['pascal', 'cifar'], required=True,
@@ -94,7 +96,7 @@ if __name__ == '__main__':
                 i, serv_addr, args.ds, args.data_path, args.num_partitions, args.batch_size, args.gpu,
                 args.mode, args.server_rounds, args.straggler_prob, args.proximal_mu,
                 args.cifar_ver, args.cifar_val_split, args.num_classes, args.threshold,
-                args.model_choice, args.dropout, args.msg_max_sz)
+                args.model_choice, args.dropout, args.msg_max_sz, args.epochs)
             
             exit(0)
 
