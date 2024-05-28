@@ -24,7 +24,7 @@ from models import train, test
 class SymClient(fl.client.Client):
     def __init__(
             self, cid, dl_train, dl_val, init_model_fn: Callable, device=None,
-            straggler_sched: list[int]=[], proximal_mu: float=0) -> None:
+            straggler_sched: list[int]=[], proximal_mu: float=0, epochs: int=1) -> None:
         super().__init__()
         self.cid = cid
         self.dl_train = dl_train
@@ -33,6 +33,7 @@ class SymClient(fl.client.Client):
         self.model = init_model_fn()
         self.straggler_sched = straggler_sched
         self.proximal_mu = proximal_mu
+        self.epochs = epochs
 
         if device:
             self.model = self.model.to(device)
@@ -95,7 +96,7 @@ class SymClient(fl.client.Client):
             ])
 
             # local training
-            train(ins.config['ds'], self.model, self.dl_train, optim, epochs=1,
+            train(ins.config['ds'], self.model, self.dl_train, optim, epochs=self.epochs,
                   device=self.device, proximal_mu=self.proximal_mu)
         else:
             log(WARNING, f"Client {self.cid} is a straggler in round {ins.config['curr_round']}")
@@ -117,17 +118,23 @@ class SymClient(fl.client.Client):
         Evaluate the model sent by server on the local client's
         local validation set. Returns performance metrics
         '''
-        log(INFO, f'Client {self.cid} evaluating')
+        if ins.config['skip']:
+            log(WARNING, f'Client {self.cid} skip evaluation this round')
+            loss = 0.0
+            accuracy = 0.0
+        else:
+            log(INFO, f'Client {self.cid} evaluating')
 
-        aes_key = RsaCryptoAPI.decrypt_aes_key(ins.config['private_key_pem'], ins.config['enc_key'])
-        self.set_parameters(ins.parameters, aes_key)
+            aes_key = RsaCryptoAPI.decrypt_aes_key(ins.config['private_key_pem'], ins.config['enc_key'])
+            self.set_parameters(ins.parameters, aes_key)
 
-        loss, accuracy = test(ins.config['ds'], self.model, self.dl_val, device=self.device)
+            loss, accuracy = test(ins.config['ds'], self.model, self.dl_val, device=self.device)
+            loss = float(loss)
 
         # send back to server
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
-            loss=float(loss),
+            loss=loss,
             num_examples=len(self.dl_val),
             metrics={'accuracy': accuracy}
         )

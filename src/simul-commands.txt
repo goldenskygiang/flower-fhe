@@ -20,21 +20,72 @@ python simul.py --mode sym --localhost --ds pascal --data_path ./data/pascal --n
 
 // FHE - CIFAR - FedAvg
 
-python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 2  --min_available_clients 1 --min_evaluate_clients 1 --min_fit_clients 1
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --model_choice mnasnet --num_partitions 2  --min_available_clients 1 --min_evaluate_clients 1 --min_fit_clients 1 --num_classes 10
 
-python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 4 
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --model_choice mnasnet --num_partitions 4 --num_classes 10
 
-python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 8 
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --model_choice mnasnet --num_partitions 8 --num_classes 10
 
-python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 16 
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --model_choice mnasnet --num_partitions 16 --num_classes 10 
 
 // SYM - CIFAR - FedAvg
 
-python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 2  --min_available_clients 1 --min_evaluate_clients 1 --min_fit_clients 1
+python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --epochs 3 --model_choice mnasnet --num_partitions 2  --min_available_clients 1 --min_evaluate_clients 1 --min_fit_clients 1 --num_classes 10
 
-python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 4 
+python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --epochs 3 --model_choice mnasnet --num_partitions 4 --num_classes 10
 
-python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 8 
+python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --epochs 3 --model_choice mnasnet --num_partitions 8 --num_classes 10
 
-python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --model_choice resnet --num_partitions 16 
+python simul.py --mode sym --localhost --ds cifar --data_path ./data/cifar --epochs 3 --model_choice mnasnet --num_partitions 16 --num_classes 10
 
+// FHE - Pascal - FedProx
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 4 --straggler_prob 0.1 --proximal_mu 0.5
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 8 --straggler_prob 0.1 --proximal_mu 0.5
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 16 --straggler_prob 0.1 --proximal_mu 0.5
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 4 --straggler_prob 0.1 --proximal_mu 1
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 8 --straggler_prob 0.1 --proximal_mu 1
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 16 --straggler_prob 0.1 --proximal_mu 1
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 4 --straggler_prob 0.3 --proximal_mu 0.5
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 8 --straggler_prob 0.3 --proximal_mu 0.5
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 16 --straggler_prob 0.3 --proximal_mu 0.5
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 4 --straggler_prob 0.3 --proximal_mu 1
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 8 --straggler_prob 0.3 --proximal_mu 1
+
+python simul.py --mode fhe --localhost --ds pascal --data_path ./data/pascal --num_partitions 16 --straggler_prob 0.3 --proximal_mu 1
+
+// FHE - CIFAR - FedProx
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 4 --straggler_prob 0.1 --proximal_mu 0.5 --num_classes 10 --model_choice mnasnet
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 8 --straggler_prob 0.1 --proximal_mu 0.5 --num_classes 10 --model_choice mnasnet
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 16 --straggler_prob 0.1 --proximal_mu 0.5 --num_classes 10 --model_choice mnasnet
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 4 --straggler_prob 0.1 --proximal_mu 1 --num_classes 10 --model_choice mnasnet
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 8 --straggler_prob 0.1 --proximal_mu 1 --num_classes 10 --model_choice mnasnet
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 16 --straggler_prob 0.1 --proximal_mu 1 --num_classes 10 --model_choice mnasnet
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 4 --straggler_prob 0.3 --proximal_mu 0.5 --num_classes 10 --model_choice mnasnet
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 8 --straggler_prob 0.3 --proximal_mu 0.5 --num_classes 10 --model_choice mnasnet
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 16 --straggler_prob 0.3 --proximal_mu 0.5 --num_classes 10 --model_choice mnasnet
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 4 --straggler_prob 0.3 --proximal_mu 1 --num_classes 10 --model_choice mnasnet
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 8 --straggler_prob 0.3 --proximal_mu 1 --num_classes 10 --model_choice mnasnet
+
+python simul.py --mode fhe --localhost --ds cifar --data_path ./data/cifar --epochs 3 --num_partitions 16 --straggler_prob 0.3 --proximal_mu 1 --num_classes 10 --model_choice mnasnet

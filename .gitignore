@@ -1,7 +1,9 @@
 src/data
 reference.ipynb
+src/results
 .vscode
 exp_*.csv
+ckpt*.bin
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

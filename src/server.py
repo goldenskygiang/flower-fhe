@@ -14,13 +14,15 @@ def init_arguments():
                         help='Run localhost only (optional)')
     parser.add_argument('--port', type=port_number_validator, default=8080,
                         help='Port number (default is 8080)')
+    parser.add_argument('--msg_max_sz', type=int, default=2 * 1000 * 1000 * 1000,
+                    help='Maximum gRPC message size in bytes (default is 2147483648 ~ 2GB)')
     
     model_group = parser.add_argument_group('Model Configuration')
     model_group.add_argument('--num_classes', type=int, default=20,
                              help='Number of output classes. 20 for PascalVOC multilabel, [10, 100] for Cifar multiclass')
     model_group.add_argument('--threshold', type=float, default=0.5,
                              help='Prediction threshold for Binary Classification (or multi-label)')
-    model_group.add_argument('--model_choice', choices=['mobilenet', 'resnet'], default='mobilenet',
+    model_group.add_argument('--model_choice', choices=['mobilenet', 'resnet', 'mnasnet'], default='mobilenet',
                              help="The backbone CNN model. Either 'mobilenet' or 'resnet' atm")
     model_group.add_argument('--dropout', type=float, default=0.4,
                              help="Dropout probability for the classification head's dropout layer")
@@ -119,7 +121,8 @@ def run_server(args):
     hist = fl.server.start_server(
         server_address=server_addr,
         config=fl.server.ServerConfig(num_rounds=args.server_rounds),
-        strategy=strategy
+        strategy=strategy,
+        grpc_max_message_length=args.msg_max_sz
     )
 
     print(f"{hist}")

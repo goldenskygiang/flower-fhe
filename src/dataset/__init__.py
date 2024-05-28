@@ -117,7 +117,7 @@ def prep_data_cifar(data_path, ver: str='10', val_split=0.15):
     train_size = total_size - val_size
     ds_train, ds_val = torch.utils.data.random_split(full_train, [train_size, val_size])
 
-    ds_test = CIFAR10(data_path, ver, train=False, transform=tf)
+    ds_test = CIFAR10(data_path, train=False, transform=tf)
 
     return ds_train, ds_val, ds_test
 
@@ -148,7 +148,7 @@ def prep_data_pascal(data_path):
 
 def prep_data_decentralized(
         ds_name: str, data_path: str, num_partitions: int,
-        batch_size: int=128, num_workers: int=2, **kwargs):
+        batch_size: int=128, num_workers: int=0, **kwargs):
     '''
     Partitions the training / validation set into N disjoint subsets,
     each of which will become the local dataset of the
@@ -181,13 +181,13 @@ def prep_data_decentralized(
 
     for trainset_ in trainsets:
         # num_total = len(trainset_)
-        dl_trains.append(DataLoader(trainset_, batch_size=batch_size, shuffle=True, num_workers=num_workers))
+        dl_trains.append(DataLoader(trainset_, batch_size=batch_size, shuffle=True, num_workers=num_workers, drop_last=True))
 
     for valset_ in valsets:
         num_total = len(valset_)
-        dl_vals.append(DataLoader(valset_, batch_size=batch_size, num_workers=num_workers))
+        dl_vals.append(DataLoader(valset_, batch_size=batch_size, num_workers=num_workers, drop_last=True))
 
     # test
-    dl_test = DataLoader(ds_test, batch_size=batch_size)
+    dl_test = DataLoader(ds_test, batch_size=batch_size, drop_last=True)
 
     return dl_trains, dl_vals, dl_test

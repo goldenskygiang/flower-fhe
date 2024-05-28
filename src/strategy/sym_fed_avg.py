@@ -1,3 +1,5 @@
+import pickle
+import time
 from crypto.rsa_crypto import RsaCryptoAPI
 
 from typing import Callable, Dict, List, Optional, Tuple, Union
@@ -86,6 +88,7 @@ class SymFedAvg(fl.server.strategy.FedAvg):
         self.dataset_name = dataset_name
 
         self.__aes_key = RsaCryptoAPI.gen_aes_key()
+        self.ckpt_name = ""
 
         super().__init__(
             fraction_fit=fraction_fit,
@@ -126,11 +129,15 @@ class SymFedAvg(fl.server.strategy.FedAvg):
         enc_tensors = [RsaCryptoAPI.encrypt_numpy_array(self.__aes_key, arr) for arr in ndarrays]
         return Parameters(tensors=enc_tensors, tensor_type="")
     
-    def _save_checkpoint(self):
-        pass
+    def _save_checkpoint(self, params):
+        self.ckpt_name = f"ckpt_sym_{int(time.time())}.bin"
+        with open(self.ckpt_name, 'wb') as f:
+            pickle.dump(params, f)
 
-    def _load_previous_checkpoint(self) -> NDArrays:
-        pass
+    def _load_previous_checkpoint(self):
+        with open(self.ckpt_name, 'rb') as f:
+            params = pickle.load(f)
+        return params
 
     def configure_fit(
             self, server_round: int, parameters: Parameters, client_manager: ClientManager
@@ -139,7 +146,11 @@ class SymFedAvg(fl.server.strategy.FedAvg):
         if self.init_stage:
             # encrypt all params
             parameters = self._encrypt_params(parameters.tensors)
+            self._save_checkpoint(parameters)
             self.init_stage = False
+
+        if len(parameters.tensors) == 0:
+            parameters = self._load_previous_checkpoint()
 
         fit_config = super().configure_fit(server_round, parameters, client_manager)
 
@@ -168,6 +179,7 @@ class SymFedAvg(fl.server.strategy.FedAvg):
                 self.__aes_key, public_key_pem)
             ins.config['private_key_pem'] = private_key_pem
             ins.config['ds'] = self.dataset_name
+            ins.config['skip'] = (len(parameters.tensors) == 0)
 
         return eval_config
 
@@ -230,5 +242,7 @@ class SymFedAvg(fl.server.strategy.FedAvg):
             log(WARNING, "No fit_metrics_aggregation_fn provided")
 
         # TODO: Save new checkpoint here
+        if len(parameters_aggregated.tensors) > 0:
+            self._save_checkpoint(parameters_aggregated)
 
         return parameters_aggregated, metrics_aggregated

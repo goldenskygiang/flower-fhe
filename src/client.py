@@ -27,16 +27,20 @@ def init_arguments():
                         help='Port number (default is 8080)')
     parser.add_argument('--num_rounds', type=int, default=5,
                         help='Number of server rounds (default is 5)')
-    
+    parser.add_argument('--msg_max_sz', type=int, default=2 * 1000 * 1000 * 1000,
+                    help='Maximum gRPC message size in bytes (default is 2147483648 ~ 2GB)')
+
     model_group = parser.add_argument_group('Model Configuration')
     model_group.add_argument('--num_classes', type=int, default=20,
                              help='Number of output classes. 20 for PascalVOC multilabel, [10, 100] for Cifar multiclass')
     model_group.add_argument('--threshold', type=float, default=0.5,
                              help='Prediction threshold for Binary Classification (or multi-label)')
-    model_group.add_argument('--model_choice', choices=['mobilenet', 'resnet'], default='mobilenet',
+    model_group.add_argument('--model_choice', choices=['mobilenet', 'resnet', 'mnasnet'], default='mobilenet',
                              help="The backbone CNN model. Either 'mobilenet' or 'resnet' atm")
     model_group.add_argument('--dropout', type=float, default=0.4,
                              help="Dropout probability for the classification head's dropout layer")
+    model_group.add_argument('--epochs', type=int, default=1,
+                             help='Number of training epochs per round (default is 1)')
     
     data_group = parser.add_argument_group('Data Configuration')
     data_group.add_argument('--ds', choices=['pascal', 'cifar'], required=True,
@@ -75,11 +79,13 @@ def init_arguments():
 
     return args
 
-def generate_client_fn(dl_train, dl_val, fhe: bool, init_model_fn: Callable,
+def generate_client_fn(client_id: int, 
+                       dl_train, dl_val, fhe: bool, init_model_fn: Callable,
                        device=None,
                        num_rounds = 5,
                        straggler_prob: float = 0,
-                       proximal_mu: float = 0):
+                       proximal_mu: float = 0,
+                       epochs: int=1):
     from fl_clients.fhe_client import FheClient
     from fl_clients.sym_client import SymClient
 
@@ -89,27 +95,28 @@ def generate_client_fn(dl_train, dl_val, fhe: bool, init_model_fn: Callable,
     log(INFO, f"Straggler schedule: {straggler_schedule}")
     
     def client_fn(cid: str):
-        cid = int(cid)
-
         if fhe:
+            log(INFO, "FHE client creating")
             return FheClient(
-                cid=cid,
+                cid=client_id,
                 dl_train=dl_train,
                 dl_val=dl_val,
                 device=device,
                 straggler_sched=straggler_schedule,
                 proximal_mu=proximal_mu,
-                init_model_fn=init_model_fn
+                init_model_fn=init_model_fn,
+                epochs=epochs
             )
         else:
             return SymClient(
-                cid=cid,
+                cid=client_id,
                 dl_train=dl_train,
                 dl_val=dl_val,
                 device=device,
                 straggler_sched=straggler_schedule,
                 proximal_mu=proximal_mu,
-                init_model_fn=init_model_fn
+                init_model_fn=init_model_fn,
+                epochs=epochs
             )
 
     return client_fn
@@ -143,7 +150,7 @@ def measure_current_process_stats(metrics_data: list, localhost: bool):
             "NetRecv": net_usage_recv
         })
 
-        log(INFO, f"Mem={memory_usage}, NetSent={net_usage_sent}, NetRecv={net_usage_recv}")
+        # log(INFO, f"Mem={memory_usage}, NetSent={net_usage_sent}, NetRecv={net_usage_recv}")
         old_net_info = net_info
 
         time.sleep(1)
@@ -165,7 +172,9 @@ def run_client(
         num_classes: int=20,
         threshold: float=0.5,
         model_choice: str='mobilenet',
-        dropout: float=0.4):
+        dropout: float=0.4,
+        msg_max_sz: int=2000000000,
+        epochs: int=1):
     
     import torch
     import flwr as fl
@@ -198,8 +207,8 @@ def run_client(
     )
     
     client_fn = generate_client_fn(
-        dl_train, dl_val, mode == 'fhe', init_model_fn,
-        device, num_rounds, straggler_prob, proximal_mu)
+        cid, dl_train, dl_val, mode == 'fhe', init_model_fn,
+        device, num_rounds, straggler_prob, proximal_mu, epochs)
 
     log(INFO, f"Client connecting to server at {server_addr}")
 
@@ -214,7 +223,8 @@ def run_client(
 
     fl.client.app.start_client(
         server_address=server_addr,
-        client_fn=client_fn
+        client_fn=client_fn,
+        grpc_max_message_length=msg_max_sz
     )
 
     stop_event.set()
@@ -232,5 +242,5 @@ if __name__ == '__main__':
     run_client(
         args.cid, server_addr, args.ds, args.data_path, args.num_partitions, args.batch_size, args.gpu,
         args.mode, args.num_rounds, args.straggler_prob, args.proximal_mu,
-        args.cifar_ver, args.cifar_val_split,
-        args.num_classes, args.threshold, args.model_choice, args.dropout)
+        args.cifar_ver, args.cifar_val_split, args.num_classes, args.threshold,
+        args.model_choice, args.dropout, args.msg_max_sz, args.epochs)

@@ -7,6 +7,11 @@ import math
 import torch
 import numpy as np
 
+from flwr.common.logger import log
+from logging import INFO
+
+import pickle
+
 MULT_DEPTH = 1
 SCALE_MOD_SIZE = 50
 BATCH_SIZE = 8
@@ -152,13 +157,22 @@ class FheCryptoAPI:
         for upd, f in zip(updates, fractions):
             for i, layer_blocks in enumerate(upd):
                 normalized = []
-                for block in layer_blocks:
+                enc_layer_blocks = pickle.loads(layer_blocks)
+                for block in enc_layer_blocks:
                     cipher = FheCryptoAPI.deserialize_ciphertext(block)
                     normalized.append(cc.EvalMult(cipher, f))
 
                 if i >= len(aggregated):
                     aggregated.append(normalized)
                 else:
-                    aggregated[i] = cc.EvalAdd(aggregated[i], normalized)
+                    for j in range(len(aggregated[i])):
+                        aggregated[i][j] = cc.EvalAdd(aggregated[i][j], normalized[j])
 
-        return aggregated
+        output = []
+        for layer in aggregated:
+            layer_blocks = []
+            for block in layer:
+                layer_blocks.append(FheCryptoAPI.serialize_to_bytes(block))
+            output.append(pickle.dumps(layer_blocks))
+
+        return output
