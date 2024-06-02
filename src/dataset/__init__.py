@@ -103,13 +103,31 @@ class CifarDataset(Dataset):
         return img, label
 
 
-def prep_data_cifar(data_path, ver: str='10', val_split=0.15):
-    tf = tvtf.Compose([
-        tvtf.ToTensor(),
-        tvtf.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+def prep_data_cifar(data_path, ver: str='10', val_split=0.2):
+    # tf = tvtf.Compose([
+    #     tvtf.ToTensor(),
+    #     tvtf.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    # ])
+
+    normalize = tvtf.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
+
+
+    train_transform = tvtf.Compose([
+    tvtf.ToTensor(),
+    tvtf.Resize(256),        # Resize to 256x256 first
+    tvtf.RandomCrop(224),     # Randomly crop to 224x224
+    tvtf.RandomHorizontalFlip(),
+    normalize,  # Use ImageNet normalization
     ])
 
-    full_train = CifarDataset(data_path, ver, train=True, transform=tf)
+    val_transform = tvtf.Compose([  # For validation and testing
+    tvtf.ToTensor(),
+    tvtf.Resize(224),  # Resize directly to 224x224
+    normalize,
+    ])
+
+    full_train = CifarDataset(data_path, ver, train=True, transform=train_transform)
 
     # Split the dataset into train, val
     total_size = len(full_train)
@@ -117,7 +135,7 @@ def prep_data_cifar(data_path, ver: str='10', val_split=0.15):
     train_size = total_size - val_size
     ds_train, ds_val = torch.utils.data.random_split(full_train, [train_size, val_size])
 
-    ds_test = CIFAR10(data_path, train=False, transform=tf)
+    ds_test = CIFAR10(data_path, train=False, transform=val_transform)
 
     return ds_train, ds_val, ds_test
 
