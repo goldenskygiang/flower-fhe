@@ -116,6 +116,14 @@ def get_model(ds: str='pascal', num_classes: int=20, threshold: float=0.5, model
     for p in model.parameters():
         p.requires_grad = False
 
+    ## unfreeze last conv layers for transfer learning
+    if model_choice == 'mnasnet':
+        unfreeze_layers=["layers.14", "layers.15", "classifier"]
+        for name, param in model.named_parameters():
+            if any(layer_name in name for layer_name in unfreeze_layers):  # Check if name matches any layer in the list
+                param.requires_grad = True
+                print(f'Unfreezing {name}')
+
     classifier = nn.Sequential(
         nn.Linear(in_features, 256),
         nn.ReLU(),
